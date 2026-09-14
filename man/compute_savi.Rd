@@ -2,17 +2,20 @@
 % Please edit documentation in R/analyse_open_canopy.R
 \name{compute_savi}
 \alias{compute_savi}
-\title{Calculer le NDRE (Normalized Difference Red Edge) approximé}
+\title{Calculer le SAVI (Soil Adjusted Vegetation Index, Huete 1988)}
 \usage{
 compute_savi(irc_raster, L = 0.5)
 }
 \arguments{
 \item{irc_raster}{SpatRaster IRC IGN}
+
+\item{L}{Facteur de correction du sol ; 0.5 convient à un couvert moyen,
+0 ramène le SAVI au NDVI et 1 correspond à un couvert très clairsemé}
 }
 \value{
-SpatRaster
+SpatRaster du SAVI
 }
 \description{
-Approximation basée sur la différence PIR - Vert normalisée.
-Utile pour différencier les espèces et l'état de santé.
+SAVI = ((PIR - Rouge) / (PIR + Rouge + L)) * (1 + L)
+Le facteur L attenue l'influence du sol nu, sensible sur couvert clairsemé.
 }

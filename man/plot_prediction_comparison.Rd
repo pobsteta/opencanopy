@@ -12,6 +12,21 @@ plot_prediction_comparison(
   n_points = 50000
 )
 }
+\arguments{
+\item{prediction}{SpatRaster du CHM prédit}
+
+\item{reference}{SpatRaster du CHM de référence (LiDAR)}
+
+\item{metrics}{Liste de métriques à afficher, telle que renvoyée par
+\code{\link[=evaluate_predictions]{evaluate_predictions()}} ; \code{NULL} pour ne rien annoter}
+
+\item{tile_name}{Nom de la tuile, repris dans les titres}
+
+\item{n_points}{Nombre de cellules échantillonnées pour le nuage de points}
+}
+\value{
+Invisible \code{NULL}, appelée pour son effet de bord (tracé)
+}
 \description{
 Visualiser la comparaison prédiction vs référence
 }

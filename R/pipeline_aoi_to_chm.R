@@ -162,7 +162,7 @@ configurer_memoire_terra <- function(fraction = TERRA_MEM_FRACTION, ...) {
   if (memmax_go < 0.1) memmax_go <- 0.1
   terraOptions(memmax = memmax_go)
   message(sprintf(
-    "Plafond mémoire du cgroup détecté : %.1f Go -> terra limité à %.1f Go",
+    "Plafond m\u00e9moire du cgroup d\u00e9tect\u00e9 : %.1f Go -> terra limit\u00e9 \u00e0 %.1f Go",
     limite / 1024^3, memmax_go))
   invisible(memmax_go)
 }
@@ -191,7 +191,7 @@ load_aoi <- function(gpkg_path, layer = NULL) {
   }
 
   aoi <- st_read(gpkg_path, layer = layer, quiet = TRUE)
-  message(sprintf("AOI chargée: %d entité(s), CRS: %s",
+  message(sprintf("AOI charg\u00e9e: %d entit\u00e9(s), CRS: %s",
                    nrow(aoi), st_crs(aoi)$Name))
 
   # Reprojection en Lambert-93 si nécessaire
@@ -309,7 +309,7 @@ download_wms_tile <- function(bbox, layer, res_m = RES_IGN, dest_file,
     last_err <- res$message
     if (attempt < max_attempts && is_transient(last_err)) {
       backoff <- 2 ^ (attempt - 1)  # 1s, 2s, 4s, ...
-      message(sprintf("    WMS échec transitoire (tentative %d/%d): %s — nouvel essai dans %ds...",
+      message(sprintf("    WMS \u00e9chec transitoire (tentative %d/%d): %s \u2014 nouvel essai dans %ds...",
                       attempt, max_attempts, last_err, backoff))
       Sys.sleep(backoff)
     } else {
@@ -317,7 +317,7 @@ download_wms_tile <- function(bbox, layer, res_m = RES_IGN, dest_file,
     }
   }
 
-  warning("Échec WMS: ", last_err)
+  warning("\u00c9chec WMS: ", last_err)
   return(NULL)
 }
 
@@ -330,6 +330,8 @@ download_wms_tile <- function(bbox, layer, res_m = RES_IGN, dest_file,
 #' @param res_m Résolution en mètres
 #' @param output_dir Répertoire de sortie
 #' @param prefix Préfixe pour les fichiers
+#' @param progress_callback Fonction appelée à chaque étape avec une liste
+#'   décrivant l'avancement ; `NULL` pour ne rien émettre
 #' @return SpatRaster mosaïqué
 download_ign_tiled <- function(bbox, layer, res_m = RES_IGN,
                                 output_dir, prefix = "ortho",
@@ -344,7 +346,7 @@ download_ign_tiled <- function(bbox, layer, res_m = RES_IGN,
   y_starts <- seq(ymin, ymax, by = tile_size_m)
 
   n_tiles <- length(x_starts) * length(y_starts)
-  message(sprintf("Téléchargement %s: %d tuile(s) WMS...", prefix, n_tiles))
+  message(sprintf("T\u00e9l\u00e9chargement %s: %d tuile(s) WMS...", prefix, n_tiles))
   if (is.function(progress_callback)) {
     progress_callback(list(type = "tile_phase_start",
                            prefix = prefix, n_tiles = n_tiles))
@@ -388,13 +390,13 @@ download_ign_tiled <- function(bbox, layer, res_m = RES_IGN,
   tile_rasters <- Filter(Negate(is.null), tile_rasters)
 
   if (length(tile_rasters) == 0) {
-    stop("Aucune tuile WMS téléchargée avec succès ",
-         "(serveur IGN injoignable ? réessayez plus tard).")
+    stop("Aucune tuile WMS t\u00e9l\u00e9charg\u00e9e avec succ\u00e8s ",
+         "(serveur IGN injoignable ? r\u00e9essayez plus tard).")
   }
 
   n_failed <- n_attempted - length(tile_rasters)
   if (n_failed > 0) {
-    warning(sprintf("%d/%d tuile(s) WMS en échec : la mosaïque sera incomplète. ",
+    warning(sprintf("%d/%d tuile(s) WMS en \u00e9chec : la mosa\u00efque sera incompl\u00e8te. ",
                     n_failed, n_attempted),
             "Relancez le pipeline pour retenter ces zones.")
   }
@@ -405,7 +407,7 @@ download_ign_tiled <- function(bbox, layer, res_m = RES_IGN,
   if (length(tile_rasters) == 1) {
     mosaic <- tile_rasters[[1]]
   } else {
-    message("Mosaïquage de ", length(tile_rasters), " tuiles...")
+    message("Mosa\u00efquage de ", length(tile_rasters), " tuiles...")
     mosaic <- do.call(terra::merge, unname(tile_rasters))
   }
 
@@ -419,6 +421,8 @@ download_ign_tiled <- function(bbox, layer, res_m = RES_IGN,
 #' @param res_m Résolution en mètres
 #' @param millesime_ortho Millésime ortho RVB (NULL = plus récent)
 #' @param millesime_irc Millésime IRC (NULL = plus récent)
+#' @param progress_callback Fonction appelée à chaque étape avec une liste
+#'   décrivant l'avancement ; `NULL` pour ne rien émettre
 #' @return Liste avec rvb, irc (SpatRaster) et millésimes utilisés
 download_ortho_for_aoi <- function(aoi, output_dir, res_m = RES_IGN,
                                     millesime_ortho = MILLESIME_ORTHO,
@@ -429,18 +433,18 @@ download_ortho_for_aoi <- function(aoi, output_dir, res_m = RES_IGN,
   # Résoudre les couches WMS selon le millésime
   layer_ortho <- ign_layer_name("ortho", millesime_ortho)
   layer_irc   <- ign_layer_name("irc",   millesime_irc)
-  label_ortho <- if (is.null(millesime_ortho)) "plus récent" else millesime_ortho
-  label_irc   <- if (is.null(millesime_irc))   "plus récent" else millesime_irc
+  label_ortho <- if (is.null(millesime_ortho)) "plus r\u00e9cent" else millesime_ortho
+  label_irc   <- if (is.null(millesime_irc))   "plus r\u00e9cent" else millesime_irc
 
   # Vérifier si les fichiers existent déjà (cache)
   rvb_path <- file.path(output_dir, "ortho_rvb.tif")
   irc_path <- file.path(output_dir, "ortho_irc.tif")
 
   if (file.exists(rvb_path) && file.exists(irc_path)) {
-    message("\n=== Ortho IGN déjà présentes (cache) ===")
+    message("\n=== Ortho IGN d\u00e9j\u00e0 pr\u00e9sentes (cache) ===")
     message(sprintf("  RVB: %s", rvb_path))
     message(sprintf("  IRC: %s", irc_path))
-    message("Réutilisation des fichiers existants (supprimez-les pour forcer le re-téléchargement).")
+    message("R\u00e9utilisation des fichiers existants (supprimez-les pour forcer le re-t\u00e9l\u00e9chargement).")
 
     # Les mosaïques mises en cache par une version antérieure peuvent porter
     # le WKT WMS non rattaché : les ancrer avant de les servir à l'aval.
@@ -460,14 +464,14 @@ download_ortho_for_aoi <- function(aoi, output_dir, res_m = RES_IGN,
 
   bbox <- as.numeric(st_bbox(st_union(aoi)))
 
-  message(sprintf("\n=== Téléchargement ortho IGN pour l'AOI ==="))
+  message(sprintf("\n=== T\u00e9l\u00e9chargement ortho IGN pour l'AOI ==="))
   message(sprintf("Emprise: %.0f, %.0f - %.0f, %.0f (Lambert-93)",
                    bbox[1], bbox[2], bbox[3], bbox[4]))
   message(sprintf("Taille: %.0f x %.0f m (%.2f ha)",
                    bbox[3] - bbox[1], bbox[4] - bbox[2],
                    (bbox[3] - bbox[1]) * (bbox[4] - bbox[2]) / 10000))
-  message(sprintf("Millésime RVB: %s (couche: %s)", label_ortho, layer_ortho))
-  message(sprintf("Millésime IRC: %s (couche: %s)", label_irc, layer_irc))
+  message(sprintf("Mill\u00e9sime RVB: %s (couche: %s)", label_ortho, layer_ortho))
+  message(sprintf("Mill\u00e9sime IRC: %s (couche: %s)", label_irc, layer_irc))
 
   # --- RVB ---
   message("\n--- Ortho RVB ---")
@@ -480,7 +484,7 @@ download_ortho_for_aoi <- function(aoi, output_dir, res_m = RES_IGN,
         message(sprintf("  Couche %s indisponible, fallback sur %s",
                         layer_ortho, IGN_LAYER_ORTHO))
         layer_ortho <<- IGN_LAYER_ORTHO
-        label_ortho <<- "plus récent (fallback)"
+        label_ortho <<- "plus r\u00e9cent (fallback)"
         download_ign_tiled(bbox, layer = IGN_LAYER_ORTHO, res_m = res_m,
                            output_dir = output_dir, prefix = "rvb",
                            progress_callback = progress_callback)
@@ -500,7 +504,7 @@ download_ortho_for_aoi <- function(aoi, output_dir, res_m = RES_IGN,
         message(sprintf("  Couche %s indisponible, fallback sur %s",
                         layer_irc, IGN_LAYER_IRC))
         layer_irc <<- IGN_LAYER_IRC
-        label_irc <<- "plus récent (fallback)"
+        label_irc <<- "plus r\u00e9cent (fallback)"
         download_ign_tiled(bbox, layer = IGN_LAYER_IRC, res_m = res_m,
                            output_dir = output_dir, prefix = "irc",
                            progress_callback = progress_callback)
@@ -526,8 +530,8 @@ download_ortho_for_aoi <- function(aoi, output_dir, res_m = RES_IGN,
   names(rvb)[1:min(3, nlyr(rvb))] <- c("Rouge", "Vert", "Bleu")[1:min(3, nlyr(rvb))]
   names(irc)[1:min(3, nlyr(irc))] <- c("PIR", "Rouge", "Vert")[1:min(3, nlyr(irc))]
 
-  message(sprintf("\nRVB sauvegardé: %s (%d x %d px)", rvb_path, ncol(rvb), nrow(rvb)))
-  message(sprintf("IRC sauvegardé: %s (%d x %d px)", irc_path, ncol(irc), nrow(irc)))
+  message(sprintf("\nRVB sauvegard\u00e9: %s (%d x %d px)", rvb_path, ncol(rvb), nrow(rvb)))
+  message(sprintf("IRC sauvegard\u00e9: %s (%d x %d px)", irc_path, ncol(irc), nrow(irc)))
 
   # Nettoyer les tuiles temporaires (et leurs sidecars GDAL :
   # .tif.aux.xml cache stats terra, .tif.ovr éventuelles pyramides).
@@ -560,13 +564,13 @@ resample_to_spot <- function(ign_raster) {
   current_res <- res(ign_raster)[1]
   agg_factor <- round(RES_SPOT / current_res)
 
-  message(sprintf("Agrégation: %.2fm → %.2fm (facteur %dx)",
+  message(sprintf("Agr\u00e9gation: %.2fm \u2192 %.2fm (facteur %dx)",
                    current_res, RES_SPOT, agg_factor))
   message(sprintf("  Avant: %d x %d px", ncol(ign_raster), nrow(ign_raster)))
 
   r_agg <- aggregate(ign_raster, fact = agg_factor, fun = "mean", na.rm = TRUE)
 
-  message(sprintf("  Après: %d x %d px", ncol(r_agg), nrow(r_agg)))
+  message(sprintf("  Apr\u00e8s: %d x %d px", ncol(r_agg), nrow(r_agg)))
   return(r_agg)
 }
 
@@ -599,7 +603,7 @@ resample_to_spot <- function(ign_raster) {
   env_py <- Sys.getenv("RETICULATE_PYTHON", "")
   if (looks_like_open_canopy(env_py)) return(env_py)
 
-  # 2. Already bound (e.g. user did use_python() earlier)
+  # 2. Already bound (e.g. user did reticulate::use_python() earlier)
   current <- tryCatch(reticulate::py_config()$python, error = function(e) "")
   if (looks_like_open_canopy(current)) return(current)
 
@@ -632,7 +636,7 @@ resample_to_spot <- function(ign_raster) {
     if (looks_like_open_canopy(cand2)) return(cand2)
   }
 
-  # 5. conda_list() — unreliable on some systems
+  # 5. reticulate::conda_list() — unreliable on some systems
   envs <- tryCatch(reticulate::conda_list(), error = function(e) NULL)
   if (!is.null(envs) && nrow(envs) > 0) {
     idx <- which(envs$name == CONDA_ENV)
@@ -655,11 +659,10 @@ resample_to_spot <- function(ign_raster) {
 #' dépendance Python en moins mais ne dispense jamais d'une
 #' installation Python complète.
 setup_python <- function() {
-  library(reticulate)
 
   target <- .find_open_canopy_python()
-  already_bound <- tryCatch(nzchar(py_config()$python), error = function(e) FALSE)
-  current <- if (already_bound) py_config()$python else ""
+  already_bound <- tryCatch(nzchar(reticulate::py_config()$python), error = function(e) FALSE)
+  current <- if (already_bound) reticulate::py_config()$python else ""
 
   if (!is.na(target)) {
     # Found a valid open_canopy python. Bind reticulate to it if not
@@ -681,18 +684,18 @@ setup_python <- function() {
       )
     }
     if (!already_bound) {
-      use_python(target, required = TRUE)
+      reticulate::use_python(target, required = TRUE)
     }
-    message("  Env conda '", CONDA_ENV, "' détecté: ", target)
+    message("  Env conda '", CONDA_ENV, "' d\u00e9tect\u00e9: ", target)
   } else {
     # No open_canopy env found via any method. Fall through to whatever
     # reticulate picked (if anything); the module checks below will
     # report what's missing. Report clearly what was tried.
     message("  AVERTISSEMENT: env conda '", CONDA_ENV,
             "' introuvable via RETICULATE_PYTHON, chemins canoniques ",
-            "(miniforge3/miniconda3/anaconda3/mambaforge) ou conda_list().")
+            "(miniforge3/miniconda3/anaconda3/mambaforge) ou reticulate::conda_list().")
     if (already_bound) {
-      message("  Python actuellement utilisé : ", current)
+      message("  Python actuellement utilis\u00e9 : ", current)
     }
   }
 
@@ -707,7 +710,7 @@ setup_python <- function() {
 
   ok <- TRUE
   for (mod in modules_core) {
-    avail <- py_module_available(mod)
+    avail <- reticulate::py_module_available(mod)
     message(sprintf("  Python %s: %s", mod, ifelse(avail, "OK", "MANQUANT")))
     if (!avail) ok <- FALSE
   }
@@ -716,9 +719,9 @@ setup_python <- function() {
   # SAUF si le package R hfhub est installé (remplacement pour le
   # seul téléchargement, pas pour l'inférence).
   if (has_hfhub_r) {
-    message("  Téléchargement HF : hfhub (R) OK — remplace le sous-module Python huggingface_hub.")
+    message("  T\u00e9l\u00e9chargement HF : hfhub (R) OK \u2014 remplace le sous-module Python huggingface_hub.")
   } else {
-    hf_avail <- py_module_available("huggingface_hub")
+    hf_avail <- reticulate::py_module_available("huggingface_hub")
     message(sprintf("  Python huggingface_hub: %s",
                      ifelse(hf_avail, "OK", "MANQUANT")))
     if (!hf_avail) ok <- FALSE
@@ -810,7 +813,7 @@ find_checkpoint_name <- function(repo_id = HF_REPO_ID,
         best <- blobs[which.max(sizes)]
         best_size <- suppressWarnings(file.size(best))
         if (!is.na(best_size) && best_size > 1e6) {
-          message("  Windows: résolution symlink HF → ", best)
+          message("  Windows: r\u00e9solution symlink HF \u2192 ", best)
           return(normalizePath(best, winslash = "/"))
         }
       }
@@ -824,13 +827,13 @@ find_checkpoint_name <- function(repo_id = HF_REPO_ID,
       blob_path <- file.path(repo_dir, "blobs", blob_hash)
       blob_size <- suppressWarnings(file.size(blob_path))
       if (file.exists(blob_path) && !is.na(blob_size) && blob_size > 1e6) {
-        message("  Windows: résolution hash HF → ", blob_path)
+        message("  Windows: r\u00e9solution hash HF \u2192 ", blob_path)
         return(normalizePath(blob_path, winslash = "/"))
       }
     }
 
     warning("Chemin HuggingFace inaccessible: ", path, "\n",
-            "  Activez le mode développeur Windows ou téléchargez le modèle manuellement.")
+            "  Activez le mode d\u00e9veloppeur Windows ou t\u00e9l\u00e9chargez le mod\u00e8le manuellement.")
   }
 
   path
@@ -847,29 +850,28 @@ find_checkpoint_name <- function(repo_id = HF_REPO_ID,
 #' @param model_name "unet" ou "pvtv2"
 #' @return Chemin local du modèle
 download_model <- function(model_name = "pvtv2") {
-  message("Téléchargement du modèle: ", model_name)
+  message("T\u00e9l\u00e9chargement du mod\u00e8le: ", model_name)
   message("Depuis: ", HF_REPO_ID)
 
   # --- Méthode 1 : hfhub R natif (préféré) ---
   if (requireNamespace("hfhub", quietly = TRUE)) {
     ckpt_name <- find_checkpoint_name(HF_REPO_ID, model_name)
     if (!is.null(ckpt_name)) {
-      message("  Téléchargement via hfhub (R natif): ", ckpt_name)
+      message("  T\u00e9l\u00e9chargement via hfhub (R natif): ", ckpt_name)
       tryCatch({
         local_path <- hfhub::hub_download(HF_REPO_ID, ckpt_name,
                                             repo_type = "dataset")
         local_path <- .resolve_hf_path(local_path)
-        message("  Modèle téléchargé: ", local_path)
+        message("  Mod\u00e8le t\u00e9l\u00e9charg\u00e9: ", local_path)
         return(local_path)
       }, error = function(e) {
-        message("  hfhub échoué: ", e$message, " \u2192 fallback Python")
+        message("  hfhub \u00e9chou\u00e9: ", e$message, " \u2192 fallback Python")
       })
     }
   }
 
   # --- Méthode 2 : Python huggingface_hub (fallback) ---
-  library(reticulate)
-  hf_hub <- import("huggingface_hub")
+  hf_hub <- reticulate::import("huggingface_hub")
 
   # Vérifier que le token HuggingFace est configuré (dataset gated)
   token <- Sys.getenv("HF_TOKEN", unset = "")
@@ -878,12 +880,12 @@ download_model <- function(model_name = "pvtv2") {
       stored <- hf_hub$HfFolder$get_token()
       if (is.null(stored) || stored == "") stop("no token")
     }, error = function(e) {
-      message("ATTENTION: Aucun token HuggingFace détecté.")
-      message("Le dataset AI4Forest/Open-Canopy est en accès restreint.")
-      message("Connectez-vous d'abord avec l'une de ces méthodes :")
+      message("ATTENTION: Aucun token HuggingFace d\u00e9tect\u00e9.")
+      message("Le dataset AI4Forest/Open-Canopy est en acc\u00e8s restreint.")
+      message("Connectez-vous d'abord avec l'une de ces m\u00e9thodes :")
       message("  1. Dans R:     Sys.setenv(HF_TOKEN = 'hf_votre_token')")
       message("  2. En terminal: huggingface-cli login")
-      message("  3. Créez un token sur: https://huggingface.co/settings/tokens")
+      message("  3. Cr\u00e9ez un token sur: https://huggingface.co/settings/tokens")
     })
   }
 
@@ -921,7 +923,7 @@ download_model <- function(model_name = "pvtv2") {
     }
 
     if (length(ckpt_files) == 0) {
-      stop("Aucun fichier .ckpt trouvé dans pretrained_models/")
+      stop("Aucun fichier .ckpt trouv\u00e9 dans pretrained_models/")
     }
 
     message("Checkpoints disponibles:")
@@ -941,28 +943,28 @@ download_model <- function(model_name = "pvtv2") {
       target_file <- ckpt_files[match_idx[1]]
     }
 
-    message("Téléchargement: ", target_file)
+    message("T\u00e9l\u00e9chargement: ", target_file)
     local_path <- hf_hub$hf_hub_download(
       repo_id  = HF_REPO_ID,
       filename = paste0("pretrained_models/", target_file),
       repo_type = "dataset"
     )
     local_path <- .resolve_hf_path(local_path)
-    message("Modèle: ", local_path)
+    message("Mod\u00e8le: ", local_path)
     return(local_path)
 
   }, error = function(e) {
     message("Impossible de lister le dataset HuggingFace: ", e$message)
-    message("Le dataset est peut-être privé (gated). Vérifiez votre HF_TOKEN.")
+    message("Le dataset est peut-\u00eatre priv\u00e9 (gated). V\u00e9rifiez votre HF_TOKEN.")
     message("")
     message("Alternatives :")
-    message("  1. Définir votre token : Sys.setenv(HF_TOKEN = 'hf_...')")
+    message("  1. D\u00e9finir votre token : Sys.setenv(HF_TOKEN = 'hf_...')")
     message("  2. Se connecter via CLI : huggingface-cli login")
     message("  3. Installer hfhub R : install.packages('hfhub')")
     message("  4. Fournir le chemin manuellement :")
     message('     result <- pipeline_aoi_to_chm("data/aoi.gpkg",')
     message('       model_path = "chemin/vers/checkpoint.ckpt")')
-    stop("Échec du téléchargement du modèle.", call. = FALSE)
+    stop("\u00c9chec du t\u00e9l\u00e9chargement du mod\u00e8le.", call. = FALSE)
   })
 }
 
@@ -986,7 +988,7 @@ download_open_canopy_src <- function(dest = NULL, force = FALSE) {
 
   # Vérifier si déjà présent
   if (dir.exists(file.path(dest, "src", "models")) && !force) {
-    message("Open-Canopy source déjà en cache: ", dest)
+    message("Open-Canopy source d\u00e9j\u00e0 en cache: ", dest)
     return(dest)
   }
 
@@ -997,7 +999,7 @@ download_open_canopy_src <- function(dest = NULL, force = FALSE) {
   }, error = function(e) FALSE)
 
   if (!git_ok) {
-    message("git n'est pas disponible, téléchargement par archive ZIP")
+    message("git n'est pas disponible, t\u00e9l\u00e9chargement par archive ZIP")
     return(.download_open_canopy_zip(dest))
   }
 
@@ -1019,11 +1021,11 @@ download_open_canopy_src <- function(dest = NULL, force = FALSE) {
   })
 
   if (dir.exists(file.path(dest, "src", "models"))) {
-    message("Open-Canopy source téléchargé: ", dest)
+    message("Open-Canopy source t\u00e9l\u00e9charg\u00e9: ", dest)
     return(dest)
   }
 
-  message("Le clone git a échoué, tentative par archive ZIP...")
+  message("Le clone git a \u00e9chou\u00e9, tentative par archive ZIP...")
   .download_open_canopy_zip(dest)
 }
 
@@ -1037,7 +1039,7 @@ download_open_canopy_src <- function(dest = NULL, force = FALSE) {
 
   tryCatch({
     dir.create(dirname(dest), recursive = TRUE, showWarnings = FALSE)
-    message("Téléchargement de l'archive Open-Canopy...")
+    message("T\u00e9l\u00e9chargement de l'archive Open-Canopy...")
     download.file(zip_url, tmp_zip, mode = "wb", quiet = TRUE)
 
     # Extraire dans un dossier temporaire
@@ -1054,14 +1056,14 @@ download_open_canopy_src <- function(dest = NULL, force = FALSE) {
     }
 
     if (dir.exists(file.path(dest, "src", "models"))) {
-      message("Open-Canopy source téléchargé (ZIP): ", dest)
+      message("Open-Canopy source t\u00e9l\u00e9charg\u00e9 (ZIP): ", dest)
       return(dest)
     }
 
-    message("Extraction réussie mais structure inattendue dans: ", dest)
+    message("Extraction r\u00e9ussie mais structure inattendue dans: ", dest)
     return(NULL)
   }, error = function(e) {
-    message("Échec du téléchargement ZIP: ", e$message)
+    message("\u00c9chec du t\u00e9l\u00e9chargement ZIP: ", e$message)
     return(NULL)
   })
 }
@@ -1119,7 +1121,7 @@ make_inference_tiles <- function(r, tile_size = 1000, overlap = 200) {
   attr(tiles, "margin_y") <- oy %/% 2L
 
   message(sprintf(
-    "%d tuile(s) de %d x %d px (%.0f x %.0f m, recouvrement %.0f m) pour l'inférence",
+    "%d tuile(s) de %d x %d px (%.0f x %.0f m, recouvrement %.0f m) pour l'inf\u00e9rence",
     length(tiles), nx, ny, nx * res_x, ny * res_y, ox * res_x))
   return(tiles)
 }
@@ -1815,11 +1817,13 @@ print("Prediction sauvegardee")
       "python"
     )
     if (!dir.exists(embedded_py_dir)) {
-      # Dernier recours : chemin relatif depuis le code source
-      pkg_root <- tryCatch(
-        rprojroot::find_package_root_file(),
-        error = function(e) getwd()
-      )
+      # Dernier recours : chemin relatif depuis le code source. rprojroot est
+      # en Suggests : sans lui on se rabat sur le repertoire courant.
+      pkg_root <- if (requireNamespace("rprojroot", quietly = TRUE)) {
+        tryCatch(rprojroot::find_package_root_file(), error = function(e) getwd())
+      } else {
+        getwd()
+      }
       embedded_py_dir <- file.path(pkg_root, "inst", "python")
     }
   }
@@ -1843,16 +1847,15 @@ print("Prediction sauvegardee")
 init_inference_model <- function(model_path, model_name = "pvtv2",
                                   open_canopy_src = NULL,
                                   num_bands = 4L, img_size = 640L) {
-  library(reticulate)
 
   # Résoudre le chemin modèle (symlinks HF sur Windows)
   model_path <- .resolve_hf_path(model_path)
   img_size <- as.integer(ceiling(img_size / 32) * 32)
   cle <- paste(model_path, model_name, num_bands, img_size, sep = "|")
 
-  # Le modèle Python survit entre deux py_run_string() de la même session :
+  # Le modèle Python survit entre deux reticulate::py_run_string() de la même session :
   # on ne reconstruit que si la clé change ou si l'interpréteur a été relancé.
-  py_present <- isTRUE(tryCatch(py_eval("'_OC_MODEL' in globals()"),
+  py_present <- isTRUE(tryCatch(reticulate::py_eval("'_OC_MODEL' in globals()"),
                                 error = function(e) FALSE))
   if (py_present && identical(.cache_modele_inference$cle, cle)) {
     return(invisible(FALSE))
@@ -1871,12 +1874,12 @@ init_inference_model <- function(model_path, model_name = "pvtv2",
   py_code <- gsub("__NUM_BANDS__", as.character(num_bands), py_code, fixed = TRUE)
   py_code <- gsub("__IMG_SIZE__", as.character(img_size), py_code, fixed = TRUE)
 
-  message("Chargement du modèle (une seule fois pour toutes les tuiles)...")
+  message("Chargement du mod\u00e8le (une seule fois pour toutes les tuiles)...")
   .cache_modele_inference$cle <- NULL
   tryCatch(
-    py_run_string(py_code),
+    reticulate::py_run_string(py_code),
     error = function(e) {
-      stop("Erreur chargement du modèle: ", conditionMessage(e), call. = FALSE)
+      stop("Erreur chargement du mod\u00e8le: ", conditionMessage(e), call. = FALSE)
     }
   )
   .cache_modele_inference$cle <- cle
@@ -1904,7 +1907,6 @@ init_inference_model <- function(model_path, model_name = "pvtv2",
 #' @keywords internal
 predict_tile <- function(tile, model_path, model_name = "pvtv2",
                           open_canopy_src = NULL, img_size = NULL) {
-  library(reticulate)
 
   if (is.null(img_size)) {
     img_size <- max(nrow(tile), ncol(tile))
@@ -1927,7 +1929,7 @@ predict_tile <- function(tile, model_path, model_name = "pvtv2",
   py_code <- gsub("__OUTPUT_PATH__", tmp_out_py, py_code, fixed = TRUE)
 
   tryCatch({
-    py_run_string(py_code)
+    reticulate::py_run_string(py_code)
     pred_disk <- rast(tmp_out)
     # Forcer la lecture en mémoire AVANT de supprimer le fichier temp
     pred <- setValues(rast(pred_disk), values(pred_disk))
@@ -1935,7 +1937,7 @@ predict_tile <- function(tile, model_path, model_name = "pvtv2",
     rm(pred_disk)
     return(pred)
   }, error = function(e) {
-    stop("Erreur inférence du modèle: ", e$message, call. = FALSE)
+    stop("Erreur inf\u00e9rence du mod\u00e8le: ", e$message, call. = FALSE)
   }, finally = {
     unlink(c(tmp_in, tmp_out))
   })
@@ -1956,7 +1958,7 @@ combine_rvb_irc <- function(rvb, irc) {
 
   # Aligner les emprises et résolutions
   if (!compareGeom(rvb, irc, stopOnError = FALSE)) {
-    message("  Rééchantillonnage IRC sur la grille RVB...")
+    message("  R\u00e9\u00e9chantillonnage IRC sur la grille RVB...")
     irc <- resample(irc, rvb, method = "bilinear")
   }
 
@@ -1987,7 +1989,7 @@ run_inference <- function(rvb, irc, model_path, model_name = "pvtv2",
                            tile_size = 1000, overlap = 200,
                            open_canopy_src = NULL,
                            progress_callback = NULL) {
-  message("\n=== Inférence Open-Canopy ===")
+  message("\n=== Inf\u00e9rence Open-Canopy ===")
 
   # 1. Combiner RVB + PIR en 4 bandes
   rgbn <- combine_rvb_irc(rvb, irc)
@@ -2024,7 +2026,7 @@ run_inference <- function(rvb, irc, model_path, model_name = "pvtv2",
   vides <- character(0)
   for (i in seq_along(tiles)) {
     tile_name <- names(tiles)[i]
-    message(sprintf("  Inférence tuile %d/%d: %s", i, length(tiles), tile_name))
+    message(sprintf("  Inf\u00e9rence tuile %d/%d: %s", i, length(tiles), tile_name))
     if (is.function(progress_callback)) {
       progress_callback(list(type = "inference_tile",
                              idx = i, n_tiles = length(tiles),
@@ -2035,7 +2037,7 @@ run_inference <- function(rvb, irc, model_path, model_name = "pvtv2",
       predict_tile(tiles[[i]], model_path, model_name, open_canopy_src,
                    img_size = img_size),
       error = function(e) {
-        warning(sprintf("Tuile %s : inférence en échec (%s)",
+        warning(sprintf("Tuile %s : inf\u00e9rence en \u00e9chec (%s)",
                         tile_name, conditionMessage(e)), call. = FALSE)
         NULL
       }
@@ -2047,19 +2049,19 @@ run_inference <- function(rvb, irc, model_path, model_name = "pvtv2",
     n_valides <- as.numeric(global(!is.na(pred), "sum", na.rm = TRUE)[1, 1])
     if (n_valides == 0) {
       vides <- c(vides, tile_name)
-      warning(sprintf("Tuile %s : prédiction entièrement NA (entrée invalide ?)",
+      warning(sprintf("Tuile %s : pr\u00e9diction enti\u00e8rement NA (entr\u00e9e invalide ?)",
                       tile_name), call. = FALSE)
     }
     predictions[[tile_name]] <- pred
   }
 
   if (length(echecs) > 0 || length(vides) > 0) {
-    message(sprintf("  %d tuile(s) en échec, %d tuile(s) entièrement NA sur %d",
+    message(sprintf("  %d tuile(s) en \u00e9chec, %d tuile(s) enti\u00e8rement NA sur %d",
                     length(echecs), length(vides), length(tiles)))
   }
 
   if (length(predictions) == 0) {
-    stop("Aucune prédiction réussie.")
+    stop("Aucune pr\u00e9diction r\u00e9ussie.")
   }
 
   # 6. Mosaïquer par moyenne pondérée sur le recouvrement. terra::merge()
@@ -2068,13 +2070,13 @@ run_inference <- function(rvb, irc, model_path, model_name = "pvtv2",
   if (length(predictions) == 1) {
     chm <- predictions[[1]]
   } else {
-    message("Mosaïquage des prédictions (fondu pondéré)...")
+    message("Mosa\u00efquage des pr\u00e9dictions (fondu pond\u00e9r\u00e9)...")
     chm <- mosaiquer_predictions(unname(predictions), margin_x, margin_y)
   }
 
   n_trous <- as.numeric(global(is.na(chm), "sum", na.rm = TRUE)[1, 1])
   if (n_trous > 0) {
-    message(sprintf("  %.2f%% de la mosaïque reste sans prédiction (NA)",
+    message(sprintf("  %.2f%% de la mosa\u00efque reste sans pr\u00e9diction (NA)",
                     100 * n_trous / ncell(chm)))
   }
 
@@ -2098,6 +2100,10 @@ run_inference <- function(rvb, irc, model_path, model_name = "pvtv2",
 #' @param res_m Résolution de téléchargement IGN (0.2m par défaut)
 #' @param millesime_ortho Millésime ortho RVB (NULL = plus récent)
 #' @param millesime_irc Millésime IRC (NULL = plus récent)
+#' @param ndvi_threshold Seuil NDVI au-dessus duquel une cellule est végétale
+#' @param ndwi_threshold Seuil NDWI au-dessous duquel une cellule n'est pas de l'eau
+#' @param progress_callback Fonction appelée à chaque étape avec une liste
+#'   décrivant l'avancement ; `NULL` pour ne rien émettre
 #' @return Liste avec tous les résultats
 pipeline_aoi_to_chm <- function(aoi_path,
                                   output_dir = file.path(getwd(), "outputs"),
@@ -2125,7 +2131,7 @@ pipeline_aoi_to_chm <- function(aoi_path,
   configurer_memoire_terra()
 
   message("##############################################################")
-  message("#  Pipeline Open-Canopy : AOI → Ortho IGN → CHM prédit       #")
+  message("#  Pipeline Open-Canopy : AOI \u2192 Ortho IGN \u2192 CHM pr\u00e9dit       #")
   message("##############################################################\n")
 
   # Helper: notify outer callback of a phase boundary. Kept inline
@@ -2137,12 +2143,12 @@ pipeline_aoi_to_chm <- function(aoi_path,
   }
 
   # --- Étape 1 : Charger l'AOI ---
-  message(">>> ÉTAPE 1/5 : Chargement de l'AOI")
+  message(">>> \u00c9TAPE 1/5 : Chargement de l'AOI")
   emit_phase("load_aoi")
   aoi <- load_aoi(aoi_path)
 
   # --- Étape 2 : Télécharger les ortho IGN ---
-  message("\n>>> ÉTAPE 2/5 : Téléchargement des ortho IGN (RVB + IRC)")
+  message("\n>>> \u00c9TAPE 2/5 : T\u00e9l\u00e9chargement des ortho IGN (RVB + IRC)")
   emit_phase("download_ortho")
   ortho <- download_ortho_for_aoi(aoi, output_dir = output_dir, res_m = res_m,
                                    millesime_ortho = millesime_ortho,
@@ -2150,21 +2156,21 @@ pipeline_aoi_to_chm <- function(aoi_path,
                                    progress_callback = progress_callback)
 
   # --- Étape 3 : Configurer Python ---
-  message("\n>>> ÉTAPE 3/5 : Configuration Python + téléchargement modèle")
+  message("\n>>> \u00c9TAPE 3/5 : Configuration Python + t\u00e9l\u00e9chargement mod\u00e8le")
   emit_phase("setup_python")
   setup_python()
   if (is.null(model_path)) {
     emit_phase("download_model", model = model_name)
     model_path <- download_model(model_name)
   } else {
-    message("Utilisation du modèle local: ", model_path)
+    message("Utilisation du mod\u00e8le local: ", model_path)
     if (!file.exists(model_path)) {
-      stop("Fichier modèle introuvable: ", model_path)
+      stop("Fichier mod\u00e8le introuvable: ", model_path)
     }
   }
 
   # --- Étape 4 : Inférence ---
-  message("\n>>> ÉTAPE 4/5 : Inférence du modèle ", model_name)
+  message("\n>>> \u00c9TAPE 4/5 : Inf\u00e9rence du mod\u00e8le ", model_name)
   emit_phase("inference", model = model_name)
 
   # Auto-détecter ou télécharger le code source Open-Canopy (pour PVTv2)
@@ -2180,13 +2186,13 @@ pipeline_aoi_to_chm <- function(aoi_path,
     for (cand in candidates) {
       if (dir.exists(file.path(cand, "src", "models"))) {
         open_canopy_src <- cand
-        message("Open-Canopy source détecté: ", open_canopy_src)
+        message("Open-Canopy source d\u00e9tect\u00e9: ", open_canopy_src)
         break
       }
     }
     # 2. Sinon, télécharger automatiquement
     if (is.null(open_canopy_src)) {
-      message("Open-Canopy source non trouvé localement, téléchargement...")
+      message("Open-Canopy source non trouv\u00e9 localement, t\u00e9l\u00e9chargement...")
       open_canopy_src <- download_open_canopy_src()
     }
   }
@@ -2200,7 +2206,7 @@ pipeline_aoi_to_chm <- function(aoi_path,
   chm <- ancrer_crs_l93(chm)
 
   # --- Étape 5 : Export ---
-  message("\n>>> ÉTAPE 5/5 : Export des résultats")
+  message("\n>>> \u00c9TAPE 5/5 : Export des r\u00e9sultats")
   emit_phase("export")
 
   # CHM à la résolution du modèle (1.5m)
@@ -2210,7 +2216,7 @@ pipeline_aoi_to_chm <- function(aoi_path,
   message("CHM 1.5m: ", chm_path)
 
   # Suréchantillonner le CHM vers la résolution IGN (0.20m)
-  message("Suréchantillonnage CHM vers 0.20m...")
+  message("Sur\u00e9chantillonnage CHM vers 0.20m...")
   disagg_factor <- round(RES_SPOT / RES_IGN)
   chm_hr_path <- file.path(output_dir, "chm_predicted_0_2m.tif")
   if (file.exists(chm_hr_path)) file.remove(chm_hr_path)
@@ -2305,8 +2311,8 @@ pipeline_aoi_to_chm <- function(aoi_path,
 
   par(mfrow = c(3, 3), mar = c(2, 2, 3, 4))
 
-  label_ortho <- if (is.null(ortho$millesime_ortho)) "plus récent" else ortho$millesime_ortho
-  label_irc   <- if (is.null(ortho$millesime_irc))   "plus récent" else ortho$millesime_irc
+  label_ortho <- if (is.null(ortho$millesime_ortho)) "plus r\u00e9cent" else ortho$millesime_ortho
+  label_irc   <- if (is.null(ortho$millesime_irc))   "plus r\u00e9cent" else ortho$millesime_irc
 
   # Palettes
   col_veg <- colorRampPalette(
@@ -2355,15 +2361,12 @@ pipeline_aoi_to_chm <- function(aoi_path,
       requireNamespace("patchwork", quietly = TRUE) &&
       requireNamespace("tidyterra", quietly = TRUE)) {
 
-    library(ggplot2)
-    library(patchwork)
-    library(tidyterra)
 
     # Sous-échantillonnage pour affichage interactif (max ~800x800 px)
     max_dim <- 800
     agg_factor <- max(1, ceiling(max(nrow(chm), ncol(chm)) / max_dim))
     if (agg_factor > 1) {
-      message("Sous-échantillonnage x", agg_factor, " pour affichage RStudio")
+      message("Sous-\u00e9chantillonnage x", agg_factor, " pour affichage RStudio")
       agg_mean <- function(r) aggregate(r, fact = agg_factor, fun = "mean")
       rvb_disp     <- agg_mean(ortho$rvb)
       irc_disp     <- agg_mean(ortho$irc)
@@ -2391,84 +2394,84 @@ pipeline_aoi_to_chm <- function(aoi_path,
                     "#c7eae5", "#5ab4ac", "#01665e")
     chm_cols   <- c("#f7fcb9", "#addd8e", "#41ab5d", "#006837", "#004529")
 
-    base_theme <- theme_minimal() +
-      theme(axis.text = element_blank(),
-            axis.title = element_blank(),
-            axis.ticks = element_blank(),
-            plot.title = element_text(size = 9, face = "bold"))
+    base_theme <- ggplot2::theme_minimal() +
+      ggplot2::theme(axis.text = ggplot2::element_blank(),
+            axis.title = ggplot2::element_blank(),
+            axis.ticks = ggplot2::element_blank(),
+            plot.title = ggplot2::element_text(size = 9, face = "bold"))
 
     # Ligne 1 : orthos + CHM brut
-    p_rvb <- ggplot() +
-      geom_spatraster_rgb(data = rvb_disp, r = 1, g = 2, b = 3,
+    p_rvb <- ggplot2::ggplot() +
+      tidyterra::geom_spatraster_rgb(data = rvb_disp, r = 1, g = 2, b = 3,
                           max_col_value = 255) +
-      labs(title = sprintf("Ortho RVB 0.20m (%s)", label_ortho)) +
+      ggplot2::labs(title = sprintf("Ortho RVB 0.20m (%s)", label_ortho)) +
       base_theme
 
-    p_irc <- ggplot() +
-      geom_spatraster_rgb(data = irc_disp, r = 1, g = 2, b = 3,
+    p_irc <- ggplot2::ggplot() +
+      tidyterra::geom_spatraster_rgb(data = irc_disp, r = 1, g = 2, b = 3,
                           max_col_value = 255) +
-      labs(title = sprintf("Ortho IRC 0.20m (%s)", label_irc)) +
+      ggplot2::labs(title = sprintf("Ortho IRC 0.20m (%s)", label_irc)) +
       base_theme
 
-    p_chm <- ggplot() +
-      geom_spatraster(data = chm_disp) +
-      scale_fill_gradientn(colours = chm_cols, na.value = "transparent",
+    p_chm <- ggplot2::ggplot() +
+      tidyterra::geom_spatraster(data = chm_disp) +
+      ggplot2::scale_fill_gradientn(colours = chm_cols, na.value = "transparent",
                            name = "m") +
-      labs(title = paste("CHM brut -", model_name)) + base_theme
+      ggplot2::labs(title = paste("CHM brut -", model_name)) + base_theme
 
     # Ligne 2 : indices de vegetation
-    p_ndvi <- ggplot() +
-      geom_spatraster(data = ndvi_disp) +
-      scale_fill_gradientn(colours = veg_cols, limits = c(-0.2, 1),
+    p_ndvi <- ggplot2::ggplot() +
+      tidyterra::geom_spatraster(data = ndvi_disp) +
+      ggplot2::scale_fill_gradientn(colours = veg_cols, limits = c(-0.2, 1),
                            na.value = "transparent", name = "NDVI") +
-      labs(title = "NDVI (activite vegetative)") + base_theme
+      ggplot2::labs(title = "NDVI (activite vegetative)") + base_theme
 
-    p_gndvi <- ggplot() +
-      geom_spatraster(data = gndvi_disp) +
-      scale_fill_gradientn(colours = veg_cols, limits = c(-0.2, 1),
+    p_gndvi <- ggplot2::ggplot() +
+      tidyterra::geom_spatraster(data = gndvi_disp) +
+      ggplot2::scale_fill_gradientn(colours = veg_cols, limits = c(-0.2, 1),
                            na.value = "transparent", name = "GNDVI") +
-      labs(title = "GNDVI (chlorophylle)") + base_theme
+      ggplot2::labs(title = "GNDVI (chlorophylle)") + base_theme
 
-    p_savi <- ggplot() +
-      geom_spatraster(data = savi_disp) +
-      scale_fill_gradientn(colours = veg_cols, limits = c(-0.3, 1.5),
+    p_savi <- ggplot2::ggplot() +
+      tidyterra::geom_spatraster(data = savi_disp) +
+      ggplot2::scale_fill_gradientn(colours = veg_cols, limits = c(-0.3, 1.5),
                            na.value = "transparent", name = "SAVI") +
-      labs(title = "SAVI (ajuste sol, L=0.5)") + base_theme
+      ggplot2::labs(title = "SAVI (ajuste sol, L=0.5)") + base_theme
 
     # Ligne 3 : NDWI, masque, CHM nettoye
-    p_ndwi <- ggplot() +
-      geom_spatraster(data = ndwi_disp) +
-      scale_fill_gradientn(colours = water_cols, limits = c(-1, 1),
+    p_ndwi <- ggplot2::ggplot() +
+      tidyterra::geom_spatraster(data = ndwi_disp) +
+      ggplot2::scale_fill_gradientn(colours = water_cols, limits = c(-1, 1),
                            na.value = "transparent", name = "NDWI") +
-      labs(title = "NDWI (detection eau)") + base_theme
+      ggplot2::labs(title = "NDWI (detection eau)") + base_theme
 
-    p_mask <- ggplot() +
-      geom_spatraster(data = as.numeric(clean_mask)) +
-      scale_fill_gradientn(colours = c("grey80", "#1a9850"),
+    p_mask <- ggplot2::ggplot() +
+      tidyterra::geom_spatraster(data = as.numeric(clean_mask)) +
+      ggplot2::scale_fill_gradientn(colours = c("grey80", "#1a9850"),
                            limits = c(0, 1), na.value = "transparent",
                            name = "mask", breaks = c(0, 1),
                            labels = c("exclu", "vegetation")) +
-      labs(title = sprintf("Masque (NDVI>%.2f & NDWI<=%.2f)",
+      ggplot2::labs(title = sprintf("Masque (NDVI>%.2f & NDWI<=%.2f)",
                            ndvi_threshold, ndwi_threshold)) + base_theme
 
-    p_chm_veg <- ggplot() +
-      geom_spatraster(data = chm_veg_disp) +
-      scale_fill_gradientn(colours = chm_cols, na.value = "transparent",
+    p_chm_veg <- ggplot2::ggplot() +
+      tidyterra::geom_spatraster(data = chm_veg_disp) +
+      ggplot2::scale_fill_gradientn(colours = chm_cols, na.value = "transparent",
                            name = "m") +
-      labs(title = "CHM masque (vegetation)") + base_theme
+      ggplot2::labs(title = "CHM masque (vegetation)") + base_theme
 
     p_combined <- (p_rvb | p_irc | p_chm) /
                   (p_ndvi | p_gndvi | p_savi) /
                   (p_ndwi | p_mask | p_chm_veg) +
-      plot_annotation(
+      patchwork::plot_annotation(
         title = "Pipeline Open-Canopy : ortho IGN \u2192 indices + CHM",
         subtitle = sprintf("AOI: %s | CHM brut: min=%.1fm, max=%.1fm, moy=%.1fm | Vegetation: %.1f%%",
                            basename(aoi_path),
                            chm_min, chm_max, chm_mean,
                            pct_veg),
-        theme = theme(
-          plot.title = element_text(size = 14, face = "bold"),
-          plot.subtitle = element_text(size = 10, color = "grey40")
+        theme = ggplot2::theme(
+          plot.title = ggplot2::element_text(size = 14, face = "bold"),
+          plot.subtitle = ggplot2::element_text(size = 10, color = "grey40")
         )
       )
 
@@ -2480,7 +2483,7 @@ pipeline_aoi_to_chm <- function(aoi_path,
   dt <- round(difftime(Sys.time(), t0, units = "mins"), 1)
 
   message("\n##############################################################")
-  message("#  Pipeline terminé en ", dt, " minutes")
+  message("#  Pipeline termin\u00e9 en ", dt, " minutes")
   message("#")
   message(sprintf("#  CHM : min=%.1fm, max=%.1fm, moy=%.1fm",
                    chm_min, chm_max, chm_mean))
@@ -2513,13 +2516,13 @@ pipeline_aoi_to_chm <- function(aoi_path,
 # ==============================================================================
 
 if (sys.nframe() == 0) {
-  message("=== Pipeline AOI → CHM ===\n")
+  message("=== Pipeline AOI \u2192 CHM ===\n")
 
   # Chemin par défaut vers le fichier AOI
   aoi_path <- file.path(getwd(), "data", "aoi.gpkg")
 
   if (!file.exists(aoi_path)) {
-    message("Fichier AOI non trouvé: ", aoi_path)
+    message("Fichier AOI non trouv\u00e9: ", aoi_path)
     message("\nUtilisation:")
     message('  # Option 1 : placer votre fichier aoi.gpkg dans data/')
     message('  # Option 2 : appeler directement la fonction :')
@@ -2530,8 +2533,8 @@ if (sys.nframe() == 0) {
     message('  result <- pipeline_aoi_to_chm("data/aoi.gpkg",')
     message('    model_path = "chemin/vers/checkpoint.ckpt")')
     message("")
-    message("Le fichier aoi.gpkg doit contenir un polygone définissant")
-    message("votre zone d'intérêt (n'importe quel CRS, sera reprojeté")
+    message("Le fichier aoi.gpkg doit contenir un polygone d\u00e9finissant")
+    message("votre zone d'int\u00e9r\u00eat (n'importe quel CRS, sera reprojet\u00e9")
     message("en Lambert-93 automatiquement).")
   } else {
     result <- pipeline_aoi_to_chm(aoi_path)

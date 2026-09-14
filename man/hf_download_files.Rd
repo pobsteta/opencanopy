@@ -6,6 +6,20 @@
 \usage{
 hf_download_files(repo_id, file_list, dest_dir, token = "", overwrite = FALSE)
 }
+\arguments{
+\item{repo_id}{Identifiant du dépôt Hugging Face (ex. "AI4Forest/Open-Canopy")}
+
+\item{file_list}{Vecteur des chemins de fichiers à télécharger dans le dépôt}
+
+\item{dest_dir}{Répertoire de destination local}
+
+\item{token}{Jeton Hugging Face ; chaîne vide pour un dépôt public}
+
+\item{overwrite}{Retélécharger un fichier déjà présent localement}
+}
+\value{
+Vecteur des chemins locaux téléchargés
+}
 \description{
 Télécharger un ensemble de fichiers depuis Hugging Face
 }

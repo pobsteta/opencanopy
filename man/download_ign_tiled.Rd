@@ -23,6 +23,9 @@ download_ign_tiled(
 \item{output_dir}{Répertoire de sortie}
 
 \item{prefix}{Préfixe pour les fichiers}
+
+\item{progress_callback}{Fonction appelée à chaque étape avec une liste
+décrivant l'avancement ; \code{NULL} pour ne rien émettre}
 }
 \value{
 SpatRaster mosaïqué

@@ -19,7 +19,8 @@ DATA_DIR     <- file.path(getwd(), "data")
 DATA_DIR_HF  <- file.path(DATA_DIR, "open_canopy")
 DATA_DIR_IGN <- file.path(DATA_DIR, "ign")
 OUTPUT_DIR   <- file.path(getwd(), "outputs")
-dir_create(OUTPUT_DIR)
+# Pas de dir_create() ici : au chargement du package cela creerait outputs/
+# dans le repertoire courant, quel qu'il soit. Cf. les fonctions d'export.
 
 # Résolutions
 RES_SPOT <- 1.5
@@ -38,8 +39,8 @@ load_spot_image <- function(tile_path) {
   if (!file.exists(tile_path)) stop("Fichier introuvable: ", tile_path)
 
   r <- rast(tile_path)
-  message(sprintf("Image SPOT chargée: %s", basename(tile_path)))
-  message(sprintf("  Dimensions: %d x %d | Bandes: %d | Résolution: %.2f m",
+  message(sprintf("Image SPOT charg\u00e9e: %s", basename(tile_path)))
+  message(sprintf("  Dimensions: %d x %d | Bandes: %d | R\u00e9solution: %.2f m",
                    nrow(r), ncol(r), nlyr(r), res(r)[1]))
   return(r)
 }
@@ -64,10 +65,10 @@ load_ign_ortho <- function(file_path, type = "rvb") {
     names(r)[1:3] <- c("PIR", "Rouge", "Vert")
   }
 
-  message(sprintf("Ortho IGN %s chargée: %s", toupper(type), basename(file_path)))
+  message(sprintf("Ortho IGN %s charg\u00e9e: %s", toupper(type), basename(file_path)))
   message(sprintf("  Dimensions: %d x %d | Bandes: %d (%s)",
                    nrow(r), ncol(r), nlyr(r), paste(names(r), collapse = ", ")))
-  message(sprintf("  Résolution: %.2f m | CRS: %s",
+  message(sprintf("  R\u00e9solution: %.2f m | CRS: %s",
                    res(r)[1], crs(r, describe = TRUE)$name))
   return(r)
 }
@@ -81,8 +82,8 @@ load_chm <- function(tile_path) {
   if (!file.exists(tile_path)) stop("Fichier introuvable: ", tile_path)
 
   r <- rast(tile_path)
-  message(sprintf("CHM chargé: %s", basename(tile_path)))
-  message(sprintf("  Dimensions: %d x %d | Résolution: %.2f m",
+  message(sprintf("CHM charg\u00e9: %s", basename(tile_path)))
+  message(sprintf("  Dimensions: %d x %d | R\u00e9solution: %.2f m",
                    nrow(r), ncol(r), res(r)[1]))
 
   # global() streame : pas de rapatriement de la dalle entiere pour un message.
@@ -101,7 +102,7 @@ load_tiles <- function(split = "test", data_type = "images",
   tile_dir <- file.path(data_dir, split, data_type)
 
   if (!dir.exists(tile_dir)) {
-    message("Répertoire introuvable: ", tile_dir)
+    message("R\u00e9pertoire introuvable: ", tile_dir)
     return(list())
   }
 
@@ -137,7 +138,7 @@ compute_ndvi <- function(irc_raster) {
 
   # global() streame : le message ne doit pas materialiser la couche entiere.
   st <- global(ndvi, c("min", "max", "mean"), na.rm = TRUE)
-  message(sprintf("NDVI calculé: min=%.3f, max=%.3f, moy=%.3f",
+  message(sprintf("NDVI calcul\u00e9: min=%.3f, max=%.3f, moy=%.3f",
                    st[1, "min"], st[1, "max"], st[1, "mean"]))
   return(ndvi)
 }
@@ -157,13 +158,15 @@ compute_gndvi <- function(irc_raster) {
   return(gndvi)
 }
 
-#' Calculer le NDRE (Normalized Difference Red Edge) approximé
+#' Calculer le SAVI (Soil Adjusted Vegetation Index, Huete 1988)
 #'
-#' Approximation basée sur la différence PIR - Vert normalisée.
-#' Utile pour différencier les espèces et l'état de santé.
+#' SAVI = ((PIR - Rouge) / (PIR + Rouge + L)) * (1 + L)
+#' Le facteur L attenue l'influence du sol nu, sensible sur couvert clairsemé.
 #'
 #' @param irc_raster SpatRaster IRC IGN
-#' @return SpatRaster
+#' @param L Facteur de correction du sol ; 0.5 convient à un couvert moyen,
+#'   0 ramène le SAVI au NDVI et 1 correspond à un couvert très clairsemé
+#' @return SpatRaster du SAVI
 compute_savi <- function(irc_raster, L = 0.5) {
   pir <- irc_raster[["PIR"]]
   rouge <- irc_raster[["Rouge"]]
@@ -189,7 +192,7 @@ compute_ndwi <- function(irc_raster) {
 
   # global() streame : le message ne doit pas materialiser la couche entiere.
   st <- global(ndwi, c("min", "max", "mean"), na.rm = TRUE)
-  message(sprintf("NDWI calculé: min=%.3f, max=%.3f, moy=%.3f",
+  message(sprintf("NDWI calcul\u00e9: min=%.3f, max=%.3f, moy=%.3f",
                    st[1, "min"], st[1, "max"], st[1, "mean"]))
   return(ndwi)
 }
@@ -206,7 +209,7 @@ mask_vegetation <- function(ndvi_raster, threshold = 0.3) {
   # global() streame par blocs : sur un masque logique, mean(na.rm) est exactement
   # sum(TRUE) / sum(!is.na()), sans rapatrier la couche entiere en memoire.
   pct <- as.numeric(global(veg_mask, "mean", na.rm = TRUE)) * 100
-  message(sprintf("Végétation détectée (NDVI >= %.2f): %.1f%%", threshold, pct))
+  message(sprintf("V\u00e9g\u00e9tation d\u00e9tect\u00e9e (NDVI >= %.2f): %.1f%%", threshold, pct))
   return(veg_mask)
 }
 
@@ -258,6 +261,11 @@ plot_ndvi <- function(ndvi_raster, title = "NDVI") {
 }
 
 #' Visualiser le CHM
+#'
+#' @param chm_raster SpatRaster du CHM
+#' @param title Titre du graphique
+#' @param col_palette Vecteur de couleurs ; `NULL` pour la palette par défaut
+#' @return Invisible `NULL`, appelée pour son effet de bord (tracé)
 plot_chm <- function(chm_raster, title = "Canopy Height Model (m)",
                       col_palette = NULL) {
   if (is.null(col_palette)) {
@@ -320,6 +328,12 @@ plot_resolution_comparison <- function(spot_raster, ign_raster,
 }
 
 #' Classification de la canopée
+#'
+#' @param chm_raster SpatRaster du CHM
+#' @param breaks Bornes des classes de hauteur, en mètres
+#' @param labels Étiquettes des classes ; une de moins que `breaks`
+#' @param title Titre du graphique
+#' @return SpatRaster classifié, renvoyé de façon invisible
 plot_canopy_classes <- function(chm_raster,
                                  breaks = c(0, 2, 5, 10, 20, Inf),
                                  labels = c("Sol/herbe (<2m)",
@@ -327,7 +341,7 @@ plot_canopy_classes <- function(chm_raster,
                                             "Petits arbres (5-10m)",
                                             "Arbres moyens (10-20m)",
                                             "Grands arbres (>20m)"),
-                                 title = "Classes de hauteur de canopée") {
+                                 title = "Classes de hauteur de canop\u00e9e") {
   classes <- classify(chm_raster, rcl = breaks, include.lowest = TRUE)
   colors <- c("#ffffcc", "#a1dab4", "#41b6c4", "#2c7fb8", "#253494")
   plot(classes, main = title, col = colors,
@@ -425,7 +439,7 @@ compute_irc_stats <- function(irc_raster, max_cells = 1e6) {
 cross_ndvi_chm <- function(ndvi_raster, chm_raster) {
   # Aligner les résolutions si nécessaire
   if (!compareGeom(ndvi_raster, chm_raster, stopOnError = FALSE)) {
-    message("Rééchantillonnage du NDVI vers la résolution du CHM...")
+    message("R\u00e9\u00e9chantillonnage du NDVI vers la r\u00e9solution du CHM...")
     ndvi_raster <- resample(ndvi_raster, chm_raster, method = "bilinear")
   }
 
@@ -451,8 +465,15 @@ cross_ndvi_chm <- function(ndvi_raster, chm_raster) {
 }
 
 #' Histogramme des hauteurs de canopée
+#'
+#' @param chm_raster SpatRaster du CHM
+#' @param title Titre du graphique
+#' @param n_breaks Nombre de classes de l'histogramme
+#' @param max_cells Nombre maximal de cellules échantillonnées : au-delà, le
+#'   raster est sous-échantillonné plutôt que rapatrié en mémoire
+#' @return Invisible `NULL`, appelée pour son effet de bord (tracé)
 plot_chm_histogram <- function(chm_raster,
-                                title = "Distribution des hauteurs de canopée",
+                                title = "Distribution des hauteurs de canop\u00e9e",
                                 n_breaks = 50,
                                 max_cells = 1e6) {
   # Un histogramme n'a pas besoin de toutes les cellules : echantillon regulier
@@ -463,9 +484,9 @@ plot_chm_histogram <- function(chm_raster,
   moyenne <- as.numeric(global(chm_raster, "mean", na.rm = TRUE))
 
   ylab <- if (ncell(chm_raster) > max_cells) {
-    "Fréquence (échantillon régulier)"
+    "Fr\u00e9quence (\u00e9chantillon r\u00e9gulier)"
   } else {
-    "Fréquence"
+    "Fr\u00e9quence"
   }
 
   hist(vals, breaks = n_breaks, main = title,
@@ -478,6 +499,11 @@ plot_chm_histogram <- function(chm_raster,
 }
 
 #' Différence de canopée entre deux dates
+#'
+#' @param chm_t1 SpatRaster du CHM à la première date
+#' @param chm_t2 SpatRaster du CHM à la seconde date, rééchantillonné sur
+#'   `chm_t1` si les géométries diffèrent
+#' @return SpatRaster de la variation de hauteur, en mètres (positif = croissance)
 compute_canopy_change <- function(chm_t1, chm_t2) {
   if (!compareGeom(chm_t1, chm_t2, stopOnError = FALSE)) {
     chm_t2 <- resample(chm_t2, chm_t1, method = "bilinear")
@@ -488,8 +514,13 @@ compute_canopy_change <- function(chm_t1, chm_t2) {
 }
 
 #' Visualiser les changements de canopée
+#'
+#' @param change_raster SpatRaster de variation de hauteur, tel que renvoyé par
+#'   [compute_canopy_change()]
+#' @param title Titre du graphique
+#' @return Invisible `NULL`, appelée pour son effet de bord (tracé)
 plot_canopy_change <- function(change_raster,
-                                title = "Changement de hauteur de canopée (m)") {
+                                title = "Changement de hauteur de canop\u00e9e (m)") {
   col_palette <- colorRampPalette(
     c("#d73027", "#fc8d59", "#fee08b", "#ffffbf",
       "#d9ef8b", "#91cf60", "#1a9850")
@@ -509,17 +540,19 @@ plot_canopy_change <- function(change_raster,
 # ==============================================================================
 
 export_raster <- function(raster_obj, filename, output_dir = OUTPUT_DIR) {
+  dir_create(output_dir)
   out_path <- file.path(output_dir, filename)
   writeRaster(raster_obj, out_path, overwrite = TRUE)
-  message("Raster exporté: ", out_path)
+  message("Raster export\u00e9: ", out_path)
   return(out_path)
 }
 
 export_stats <- function(stats_df, filename = "statistics.csv",
                           output_dir = OUTPUT_DIR) {
+  dir_create(output_dir)
   out_path <- file.path(output_dir, filename)
   write.csv(stats_df, out_path, row.names = FALSE)
-  message("Statistiques exportées: ", out_path)
+  message("Statistiques export\u00e9es: ", out_path)
   return(out_path)
 }
 
@@ -536,9 +569,9 @@ if (sys.nframe() == 0) {
   }))
 
   if (length(all_images) == 0) {
-    message("Aucun fichier image trouvé dans ", DATA_DIR)
-    message("Exécutez d'abord: Rscript R/download_open_canopy.R")
-    message("\nDémonstration avec des données simulées...\n")
+    message("Aucun fichier image trouv\u00e9 dans ", DATA_DIR)
+    message("Ex\u00e9cutez d'abord: Rscript R/download_open_canopy.R")
+    message("\nD\u00e9monstration avec des donn\u00e9es simul\u00e9es...\n")
 
     # --- Simulation IGN IRC + CHM ---
     set.seed(42)
@@ -599,7 +632,7 @@ if (sys.nframe() == 0) {
     message("\nGraphiques: ", file.path(OUTPUT_DIR, "demo_ign_analysis.pdf"))
 
   } else {
-    message(sprintf("%d fichier(s) image trouvé(s)\n", length(all_images)))
+    message(sprintf("%d fichier(s) image trouv\u00e9(s)\n", length(all_images)))
 
     # Séparer par type
     ign_irc <- all_images[grep("IRC|irc|infrarouge", all_images, ignore.case = TRUE)]
@@ -630,12 +663,12 @@ if (sys.nframe() == 0) {
       plot_ndvi(ndvi, title = paste("NDVI", tile_name))
 
       veg <- mask_vegetation(ndvi)
-      plot(veg, main = paste("Végétation", tile_name),
+      plot(veg, main = paste("V\u00e9g\u00e9tation", tile_name),
            col = c("white", "#1a9850"))
       dev.off()
       message("  Graphiques: ", pdf_path)
     }
   }
 
-  message("\n=== Analyse terminée ===")
+  message("\n=== Analyse termin\u00e9e ===")
 }

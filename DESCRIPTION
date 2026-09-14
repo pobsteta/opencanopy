@@ -23,7 +23,11 @@ Imports:
     jsonlite,
     curl,
     fs,
-    reticulate
+    reticulate,
+    grDevices,
+    graphics,
+    stats,
+    utils
 Suggests:
     testthat (>= 3.0.0),
     knitr,
@@ -31,7 +35,8 @@ Suggests:
     ggplot2,
     tidyterra,
     patchwork,
-    hfhub
+    hfhub,
+    rprojroot
 VignetteBuilder: knitr
 URL: https://github.com/pobsteta/opencanopy, https://pobsteta.github.io/opencanopy/
 BugReports: https://github.com/pobsteta/opencanopy/issues

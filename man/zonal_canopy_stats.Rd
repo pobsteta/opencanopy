@@ -6,6 +6,16 @@
 \usage{
 zonal_canopy_stats(chm_raster, zones, fun = "mean")
 }
+\arguments{
+\item{chm_raster}{SpatRaster du CHM}
+
+\item{zones}{SpatVector des zones d'agrégation}
+
+\item{fun}{Fonction d'agrégation passée à \code{\link[terra:zonal]{terra::zonal()}} (ex. "mean")}
+}
+\value{
+data.frame d'une ligne par zone
+}
 \description{
 Statistiques zonales
 }

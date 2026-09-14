@@ -18,7 +18,7 @@ de couches du GeoPackage}
 Invisible \code{NULL}, appelée pour son effet de bord (écriture disque)
 }
 \description{
-Chaque couche binaire (valeurs dans {0, 1}) est vectorisée puis écrite comme
+Chaque couche binaire (valeurs valant 0 ou 1) est vectorisée puis écrite comme
 couche du GeoPackage ; les autres sont écrites en GeoTIFF à côté, un raster
 continu n'ayant pas de représentation vectorielle utile.
 }

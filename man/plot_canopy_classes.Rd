@@ -12,6 +12,18 @@ plot_canopy_classes(
   title = "Classes de hauteur de canopée"
 )
 }
+\arguments{
+\item{chm_raster}{SpatRaster du CHM}
+
+\item{breaks}{Bornes des classes de hauteur, en mètres}
+
+\item{labels}{Étiquettes des classes ; une de moins que \code{breaks}}
+
+\item{title}{Titre du graphique}
+}
+\value{
+SpatRaster classifié, renvoyé de façon invisible
+}
 \description{
 Classification de la canopée
 }
