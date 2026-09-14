@@ -2,7 +2,7 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/pobsteta/opencanopy/actions/workflows/r.yml/badge.svg)](https://github.com/pobsteta/opencanopy/actions/workflows/r.yml)
-[![Version](https://img.shields.io/badge/version-1.0.2-blue.svg?logo=github)](https://github.com/pobsteta/opencanopy)
+[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg?logo=github)](https://github.com/pobsteta/opencanopy)
 [![pkgdown](https://github.com/pobsteta/opencanopy/actions/workflows/pkgdown.yaml/badge.svg)](https://pobsteta.github.io/opencanopy/)
 [![codecov](https://codecov.io/gh/pobsteta/opencanopy/graph/badge.svg)](https://codecov.io/gh/pobsteta/opencanopy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?logo=opensourceinitiative)](https://opensource.org/licenses/MIT)
