@@ -76,6 +76,97 @@ OPEN_CANOPY_SRC <- NULL  # Auto-détecté, téléchargé, ou module embarqué
 # --- Limites WMS ---
 WMS_MAX_PX <- 4096  # Taille max par requête WMS
 
+# --- Plafond mémoire ---
+# Fraction du plafond mémoire du cgroup laissée à terra. Le reste couvre
+# l'interpréteur R, reticulate/torch et les objets vivants du pipeline.
+TERRA_MEM_FRACTION <- 0.5
+
+#' Lire le plafond mémoire du cgroup courant (Linux)
+#'
+#' `terra` dimensionne ses décisions « en mémoire vs sur disque » à partir de
+#' `/proc/meminfo`, qui n'est pas cgroup-aware : dans un conteneur ou sous un
+#' `systemd-run --property=MemoryMax=...`, il voit la RAM de la machine entière
+#' et se fait tuer par le cgroup. Cette fonction retrouve le plafond réel.
+#'
+#' On remonte toute la hiérarchie du cgroup : la contrainte effective est le
+#' plus petit plafond rencontré entre la racine et le cgroup du processus.
+#'
+#' @param racine Racine du système de fichiers cgroup (paramétrable pour les tests)
+#' @param proc_cgroup Fichier décrivant le cgroup du processus
+#' @return Plafond en octets, ou NA si aucun plafond n'est posé
+#' @keywords internal
+.limite_memoire_cgroup <- function(racine = "/sys/fs/cgroup",
+                                    proc_cgroup = "/proc/self/cgroup") {
+  if (.Platform$OS.type != "unix" || !dir.exists(racine)) {
+    return(NA_real_)
+  }
+  lire_octets <- function(chemin) {
+    if (!file.exists(chemin)) return(NA_real_)
+    val <- tryCatch(readLines(chemin, warn = FALSE)[1],
+                    error = function(e) NA_character_)
+    if (is.na(val) || identical(val, "max")) return(NA_real_)
+    val <- suppressWarnings(as.numeric(val))
+    # cgroups v1 code « pas de limite » par une valeur énorme (~2^63)
+    if (is.na(val) || val <= 0 || val > 2^53) return(NA_real_)
+    val
+  }
+
+  limites <- numeric(0)
+
+  # cgroups v2 : /proc/self/cgroup donne "0::<chemin relatif>"
+  if (file.exists(proc_cgroup)) {
+    lignes <- tryCatch(readLines(proc_cgroup, warn = FALSE),
+                       error = function(e) character(0))
+    v2 <- grep("^0::", lignes, value = TRUE)
+    if (length(v2) > 0) {
+      segments <- strsplit(sub("^0::", "", v2[1]), "/", fixed = TRUE)[[1]]
+      segments <- segments[nzchar(segments)]
+      dossiers <- racine
+      if (length(segments) > 0) {
+        dossiers <- c(dossiers,
+                      file.path(racine,
+                                Reduce(function(a, b) paste(a, b, sep = "/"),
+                                       segments, accumulate = TRUE)))
+      }
+      for (d in dossiers) {
+        limites <- c(limites, lire_octets(file.path(d, "memory.max")))
+      }
+    }
+  }
+
+  # cgroups v1
+  limites <- c(limites,
+               lire_octets(file.path(racine, "memory", "memory.limit_in_bytes")))
+
+  limites <- limites[is.finite(limites)]
+  if (length(limites) == 0) return(NA_real_)
+  min(limites)
+}
+
+#' Aligner le budget mémoire de terra sur le plafond du cgroup
+#'
+#' Sans cela, `terra` conclut qu'un calcul tient en RAM (il voit la mémoire de
+#' la machine) alors que le cgroup le tue bien avant : c'est ce qui a produit
+#' un SIGKILL au calcul des indices, après une heure, sur un AOI de
+#' 233 millions de cellules. Avec `memmax`, `terra` bascule seul sur disque.
+#'
+#' @param fraction Part du plafond laissée à terra
+#' @param ... Passé à [.limite_memoire_cgroup()] (racine du cgroup, pour les tests)
+#' @return Le `memmax` appliqué en Go, ou NA si aucun plafond détecté
+#' @keywords internal
+configurer_memoire_terra <- function(fraction = TERRA_MEM_FRACTION, ...) {
+  limite <- .limite_memoire_cgroup(...)
+  if (!is.finite(limite)) return(invisible(NA_real_))
+
+  memmax_go <- (limite * fraction) / 1024^3
+  if (memmax_go < 0.1) memmax_go <- 0.1
+  terraOptions(memmax = memmax_go)
+  message(sprintf(
+    "Plafond mémoire du cgroup détecté : %.1f Go -> terra limité à %.1f Go",
+    limite / 1024^3, memmax_go))
+  invisible(memmax_go)
+}
+
 # ==============================================================================
 # 1. Charger et préparer l'AOI
 # ==============================================================================
@@ -1102,95 +1193,36 @@ mosaiquer_predictions <- function(preds, margin_x = 0L, margin_y = 0L) {
   ifel(poids > 0, somme / poids, NA)
 }
 
-#' Exécuter l'inférence sur une tuile
-#'
-#' Supporte les deux architectures Open-Canopy :
-#' - UNet (SMP, ResNet34) : reconstruction directe via segmentation_models_pytorch
-#' - PVTv2 (timm, pvt_v2_b3) : module embarqué ou code source Open-Canopy
-#'
-#' @param tile SpatRaster (4 bandes : R, G, B, PIR à 1.5m)
-#' @param model_path Chemin du modèle .ckpt (PyTorch Lightning)
-#' @param model_name "unet" ou "pvtv2" pour la reconstruction
-#' @param open_canopy_src Chemin vers le code source Open-Canopy (pour PVTv2)
-#' @return SpatRaster CHM prédit (1 bande, en mètres)
-predict_tile <- function(tile, model_path, model_name = "pvtv2",
-                          open_canopy_src = NULL) {
-  library(reticulate)
+# ------------------------------------------------------------------------------
+# Inférence : modèle chargé une seule fois, prédiction par tuile
+# ------------------------------------------------------------------------------
+#
+# Le checkpoint (~520 Mo) et la reconstruction du réseau étaient payés à
+# *chaque* tuile : sur un AOI de 15 tuiles, 15 lectures du checkpoint (24 Go
+# d'E/S mesurés) et 15 reconstructions de PVTv2-b3. Le modèle vit désormais
+# dans l'environnement `reticulate` persistant : `init_inference_model()`
+# le construit une fois, `predict_tile()` ne fait plus que lire le raster,
+# la passe avant et l'écriture.
 
-  # Sauvegarder la tuile en fichier temporaire (chemin long pour Windows)
-  tmp_dir <- normalizePath(tempdir(), winslash = "/")
-  tmp_in <- tempfile(tmpdir = tmp_dir, fileext = ".tif")
-  tmp_out <- tempfile(tmpdir = tmp_dir, fileext = ".tif")
-  writeRaster(tile, tmp_in, overwrite = TRUE)
+# Cache R du modèle Python (clé = checkpoint + architecture + canaux + img_size)
+.cache_modele_inference <- new.env(parent = emptyenv())
 
-  # Résoudre le chemin modèle (symlinks HF sur Windows)
-  model_path <- .resolve_hf_path(model_path)
-
-  # Normaliser les chemins pour Python sous Windows
-  tmp_in_py <- gsub("\\\\", "/", tmp_in)
-  tmp_out_py <- gsub("\\\\", "/", tmp_out)
-  model_path_py <- gsub("\\\\", "/", model_path)
-
-  # Chemin Open-Canopy source (pour PVTv2)
-  oc_src_py <- ""
-  if (!is.null(open_canopy_src)) {
-    oc_src_py <- gsub("\\\\", "/", open_canopy_src)
-  }
-
-  py_code <- '
+# Script Python d'initialisation : charge le checkpoint et construit le modèle,
+# puis le laisse dans `_OC_MODEL` (environnement `__main__` de reticulate).
+.PY_INIT_MODELE <- '
 import sys
 import os
+import gc
 import torch
 import torch.nn as nn
 import numpy as np
-import rasterio
 
-# ======================================================================
-# Charger l image 4 bandes (R, G, B, PIR)
-# ======================================================================
-with rasterio.open("__INPUT_PATH__") as src:
-    image = src.read().astype(np.float32)  # (C, H, W)
-    profile = src.profile.copy()
-
-num_bands, H, W = image.shape
-print(f"Image chargee: {num_bands} bandes, {H}x{W} px")
-
-# ======================================================================
-# Neutraliser les NA de l entree
-# ======================================================================
-# Un seul pixel NaN suffit a rendre NaN la prediction de TOUTE la tuile :
-# l attention spatiale du PVTv2 (et les convolutions du UNet) propagent le
-# NaN a l ensemble de la carte de features. C est ce qui produisait des
-# tuiles entierement blanches dans la mosaique quand l ortho avait un trou
-# (tuile WMS en echec, bord de mosaique RVB/IRC desaligne).
-# On remplace par la mediane des pixels valides, puis on remet le masque NA
-# sur la prediction finale.
-nan_mask = ~np.isfinite(image).all(axis=0)  # (H, W)
-n_nan = int(nan_mask.sum())
-if n_nan:
-    pct_nan = 100.0 * n_nan / nan_mask.size
-    print(f"ATTENTION: {n_nan} pixel(s) NA/inf dans la tuile ({pct_nan:.2f}%)"
-          " -> remplaces par la mediane avant inference")
-    valides = image[:, ~nan_mask]
-    if valides.size:
-        remplissage = np.median(valides, axis=1)
-    else:
-        print("  Tuile entierement NA : prediction impossible, sortie NA")
-        remplissage = np.zeros(num_bands, dtype=np.float32)
-    for _c in range(num_bands):
-        image[_c][nan_mask] = remplissage[_c]
-
-# Tensor brut - le modele Open-Canopy attend les valeurs brutes (pas de normalisation)
-tensor = torch.from_numpy(image).unsqueeze(0)  # (1, C, H, W)
-print(f"Tensor: shape={tuple(tensor.shape)}, "
-      f"min={tensor.min():.1f}, max={tensor.max():.1f}")
-
-# ======================================================================
-# Charger le checkpoint PyTorch Lightning
-# ======================================================================
 ckpt_path = "__MODEL_PATH__"
+model_name = "__MODEL_NAME__"
 oc_src = "__OC_SRC__"
 embedded_py = "__EMBEDDED_PY__"
+num_bands = int("__NUM_BANDS__")
+_img_size = int("__IMG_SIZE__")
 
 # Ajouter Open-Canopy au path avant chargement (le checkpoint peut
 # referencer des classes du module src)
@@ -1272,7 +1304,6 @@ _sd = dm_hparams.get("std", "?")
 print(f"Model hparams: num_channels={_nc}")
 print(f"Datamodule hparams mean={_mn}, std={_sd} (NON utilises a l entrainement)")
 print(f"  -> Pas de normalisation (le modele attend les valeurs brutes des pixels)")
-print(f"  Tensor brut: min={tensor.min():.3f}, max={tensor.max():.3f}")
 
 state_dict = checkpoint.get("state_dict", checkpoint)
 keys = list(state_dict.keys())
@@ -1418,7 +1449,6 @@ def smart_load_state_dict(model, ckpt_state_dict, prefixes_to_strip):
 # ======================================================================
 # Reconstruire le modele selon l architecture
 # ======================================================================
-model_name = "__MODEL_NAME__"
 model = None
 
 # Detecter le type de modele depuis les cles du checkpoint
@@ -1511,10 +1541,12 @@ elif has_timm_model or has_seg_head or model_name == "pvtv2":
     print(f"  Seg head checkpoint: {len(_seg_ckpt_keys)} cles, "
           f"nested={_has_nested}, decoder_stride={_ds_label}")
 
-    # PVTv2 reduit par facteur 32 : img_size doit etre multiple de 32
-    _pad_multiple = 32
-    _img_size = ((max(H, W) + _pad_multiple - 1) // _pad_multiple) * _pad_multiple
-    print(f"  img_size ajuste: {max(H, W)} -> {_img_size} (multiple de {_pad_multiple})")
+    # PVTv2 reduit par facteur 32 : img_size doit etre multiple de 32.
+    # Pour un backbone a sortie NCHW (pvt_v2), la structure du reseau ne
+    # depend pas de img_size (downsample_factor vaut 32 quelle que soit la
+    # taille) : un modele unique sert donc toutes les tuiles, y compris les
+    # tuiles de bord plus petites, qui sont paddees a leur propre multiple.
+    print(f"  img_size du modele: {_img_size} (multiple de 32)")
 
     # Creer le modele (compatible ancien et nouveau timmnet_standalone)
     try:
@@ -1578,12 +1610,81 @@ elif has_timm_model or has_seg_head or model_name == "pvtv2":
     model = pvt_model
     print("PVTv2 charge avec succes")
 
-# ======================================================================
-# Inference
-# ======================================================================
 if model is None:
     raise RuntimeError("Le modele na pas pu etre charge. Verifiez les logs ci-dessus.")
 
+# Le checkpoint (~520 Mo) ne sert plus une fois les poids copies dans le
+# modele : le liberer evite de le garder en memoire pendant toute la serie
+# de tuiles.
+del checkpoint, state_dict
+gc.collect()
+
+# Le modele reste dans lenvironnement persistant de reticulate : les tuiles
+# suivantes le reutilisent sans relire le checkpoint ni reconstruire le reseau.
+_OC_MODEL = model
+_OC_NUM_BANDS = num_bands
+_OC_IMG_SIZE = _img_size
+print("Modele pret (reutilisable pour toutes les tuiles)")
+'
+
+# Script Python de prédiction d'une tuile : suppose `_OC_MODEL` déjà construit.
+.PY_PREDICT_TUILE <- '
+import numpy as np
+import rasterio
+import torch
+import torch.nn as nn
+
+model = _OC_MODEL
+
+# ======================================================================
+# Charger l image 4 bandes (R, G, B, PIR)
+# ======================================================================
+with rasterio.open("__INPUT_PATH__") as src:
+    image = src.read().astype(np.float32)  # (C, H, W)
+    profile = src.profile.copy()
+
+num_bands, H, W = image.shape
+print(f"Image chargee: {num_bands} bandes, {H}x{W} px")
+
+if num_bands != _OC_NUM_BANDS:
+    raise RuntimeError(
+        f"Tuile a {num_bands} bandes mais le modele a ete construit pour "
+        f"{_OC_NUM_BANDS}")
+
+# ======================================================================
+# Neutraliser les NA de l entree
+# ======================================================================
+# Un seul pixel NaN suffit a rendre NaN la prediction de TOUTE la tuile :
+# l attention spatiale du PVTv2 (et les convolutions du UNet) propagent le
+# NaN a l ensemble de la carte de features. C est ce qui produisait des
+# tuiles entierement blanches dans la mosaique quand l ortho avait un trou
+# (tuile WMS en echec, bord de mosaique RVB/IRC desaligne).
+# On remplace par la mediane des pixels valides, puis on remet le masque NA
+# sur la prediction finale.
+nan_mask = ~np.isfinite(image).all(axis=0)  # (H, W)
+n_nan = int(nan_mask.sum())
+if n_nan:
+    pct_nan = 100.0 * n_nan / nan_mask.size
+    print(f"ATTENTION: {n_nan} pixel(s) NA/inf dans la tuile ({pct_nan:.2f}%)"
+          " -> remplaces par la mediane avant inference")
+    valides = image[:, ~nan_mask]
+    if valides.size:
+        remplissage = np.median(valides, axis=1)
+    else:
+        print("  Tuile entierement NA : prediction impossible, sortie NA")
+        remplissage = np.zeros(num_bands, dtype=np.float32)
+    for _c in range(num_bands):
+        image[_c][nan_mask] = remplissage[_c]
+
+# Tensor brut - le modele Open-Canopy attend les valeurs brutes (pas de normalisation)
+tensor = torch.from_numpy(image).unsqueeze(0)  # (1, C, H, W)
+print(f"Tensor: shape={tuple(tensor.shape)}, "
+      f"min={tensor.min():.1f}, max={tensor.max():.1f}")
+print(f"  Tensor brut: min={tensor.min():.3f}, max={tensor.max():.3f}")
+
+# ======================================================================
+# Inference
+# ======================================================================
 # Padding a un multiple de 32 pour PVTv2 (ou autre modele par reduction)
 _pad = 32
 _orig_H, _orig_W = H, W
@@ -1598,10 +1699,40 @@ if _pad_H != _orig_H or _pad_W != _orig_W:
     tensor = nn.functional.pad(
         tensor, (0, _pad_W - _orig_W, 0, _pad_H - _orig_H), mode="replicate")
 
+# Diagnostic des features du backbone SANS seconde passe : on espionne
+# forward_features pendant l unique passe avant. Le backbone (attention
+# spatiale du PVTv2) est la partie chere ; le rappeler juste pour un print
+# doublait le cout de chaque tuile. Le diagnostic reste identique : c est lui
+# qui avait revele l effondrement des activations (mean=0.0004).
+_feat_capture = {}
+_backbone = getattr(model, "model", None)
+_espion_pose = False
+if _backbone is not None and hasattr(_backbone, "forward_features"):
+    _ff_origine = _backbone.forward_features
+    _ff_propre = "forward_features" in _backbone.__dict__
+
+    def _ff_espion(*args, **kwargs):
+        _sortie = _ff_origine(*args, **kwargs)
+        _feat_capture["features"] = _sortie
+        return _sortie
+
+    _backbone.forward_features = _ff_espion
+    _espion_pose = True
+
 with torch.no_grad():
-    # Debug : verifier les features du backbone
-    _features = model.model.forward_features(tensor)
-    if isinstance(_features, (list, tuple)):
+    try:
+        output = model(tensor)
+    finally:
+        if _espion_pose:
+            if _ff_propre:
+                _backbone.forward_features = _ff_origine
+            else:
+                del _backbone.forward_features
+
+    _features = _feat_capture.get("features")
+    if _features is None:
+        print("Backbone features: non capturees (pas de forward_features expose)")
+    elif isinstance(_features, (list, tuple)):
         _last_feat = _features[-1]
         print(f"Backbone features: {len(_features)} niveaux, "
               f"dernier={tuple(_last_feat.shape)}, "
@@ -1610,8 +1741,7 @@ with torch.no_grad():
     else:
         print(f"Backbone features: shape={tuple(_features.shape)}, "
               f"min={_features.min():.4f}, max={_features.max():.4f}")
-
-    output = model(tensor)
+    _feat_capture.clear()
 
     # Le modele retourne {"out": tensor} (Open-Canopy) ou tensor (SMP)
     if isinstance(output, dict):
@@ -1655,6 +1785,10 @@ with torch.no_grad():
               f"mean={np.nanmean(pred):.1f}m, "
               f"NA={100.0 * (~_fini).sum() / _fini.size:.2f}%")
 
+# Liberer les tenseurs de la tuile : le modele reste en memoire dun appel a
+# lautre, pas les cartes dactivation.
+del tensor, output, _raw, _features, image
+
 # ======================================================================
 # Sauvegarder le resultat
 # ======================================================================
@@ -1662,9 +1796,15 @@ profile.update(count=1, dtype="float32", compress="lzw", nodata=float("nan"))
 with rasterio.open("__OUTPUT_PATH__", "w", **profile) as dst:
     dst.write(pred.astype(np.float32), 1)
 
+del pred
 print("Prediction sauvegardee")
 '
-  # Chemin vers le module Python embarqué (timmnet_standalone)
+
+#' Répertoire du module Python embarqué (timmnet_standalone)
+#'
+#' @return Chemin du dossier `inst/python` du package
+#' @keywords internal
+.repertoire_python_embarque <- function() {
   embedded_py_dir <- system.file("python", package = "opencanopy")
   if (!nzchar(embedded_py_dir)) {
     # Fallback: package non installé, utiliser le chemin source
@@ -1681,14 +1821,105 @@ print("Prediction sauvegardee")
       embedded_py_dir <- file.path(pkg_root, "inst", "python")
     }
   }
-  embedded_py_py <- gsub("\\\\", "/", embedded_py_dir)
+  gsub("\\\\", "/", embedded_py_dir)
+}
 
-  # Substitution des placeholders (evite sprintf et ses limites)
-  py_code <- gsub("__INPUT_PATH__", tmp_in_py, py_code, fixed = TRUE)
-  py_code <- gsub("__MODEL_PATH__", model_path_py, py_code, fixed = TRUE)
+#' Charger le checkpoint et construire le modèle une seule fois
+#'
+#' Le modèle est laissé dans l'environnement Python persistant de
+#' `reticulate` (`_OC_MODEL`). Les appels suivants avec les mêmes paramètres
+#' ne rechargent rien : c'est ce qui évite de relire 520 Mo de checkpoint et
+#' de reconstruire PVTv2-b3 à chaque tuile.
+#'
+#' @param model_path Chemin du modèle .ckpt (PyTorch Lightning)
+#' @param model_name "unet" ou "pvtv2"
+#' @param open_canopy_src Chemin vers le code source Open-Canopy (pour PVTv2)
+#' @param num_bands Nombre de canaux d'entrée (4 : R, G, B, PIR)
+#' @param img_size Taille de référence du modèle (multiple de 32)
+#' @return TRUE si le modèle a été (re)construit, FALSE s'il était déjà chargé
+init_inference_model <- function(model_path, model_name = "pvtv2",
+                                  open_canopy_src = NULL,
+                                  num_bands = 4L, img_size = 640L) {
+  library(reticulate)
+
+  # Résoudre le chemin modèle (symlinks HF sur Windows)
+  model_path <- .resolve_hf_path(model_path)
+  img_size <- as.integer(ceiling(img_size / 32) * 32)
+  cle <- paste(model_path, model_name, num_bands, img_size, sep = "|")
+
+  # Le modèle Python survit entre deux py_run_string() de la même session :
+  # on ne reconstruit que si la clé change ou si l'interpréteur a été relancé.
+  py_present <- isTRUE(tryCatch(py_eval("'_OC_MODEL' in globals()"),
+                                error = function(e) FALSE))
+  if (py_present && identical(.cache_modele_inference$cle, cle)) {
+    return(invisible(FALSE))
+  }
+
+  oc_src_py <- ""
+  if (!is.null(open_canopy_src)) {
+    oc_src_py <- gsub("\\\\", "/", open_canopy_src)
+  }
+
+  py_code <- .PY_INIT_MODELE
+  py_code <- gsub("__MODEL_PATH__", gsub("\\\\", "/", model_path), py_code, fixed = TRUE)
   py_code <- gsub("__MODEL_NAME__", model_name, py_code, fixed = TRUE)
   py_code <- gsub("__OC_SRC__", oc_src_py, py_code, fixed = TRUE)
-  py_code <- gsub("__EMBEDDED_PY__", embedded_py_py, py_code, fixed = TRUE)
+  py_code <- gsub("__EMBEDDED_PY__", .repertoire_python_embarque(), py_code, fixed = TRUE)
+  py_code <- gsub("__NUM_BANDS__", as.character(num_bands), py_code, fixed = TRUE)
+  py_code <- gsub("__IMG_SIZE__", as.character(img_size), py_code, fixed = TRUE)
+
+  message("Chargement du modèle (une seule fois pour toutes les tuiles)...")
+  .cache_modele_inference$cle <- NULL
+  tryCatch(
+    py_run_string(py_code),
+    error = function(e) {
+      stop("Erreur chargement du modèle: ", conditionMessage(e), call. = FALSE)
+    }
+  )
+  .cache_modele_inference$cle <- cle
+  invisible(TRUE)
+}
+
+#' Exécuter l'inférence sur une tuile
+#'
+#' Supporte les deux architectures Open-Canopy :
+#' - UNet (SMP, ResNet34) : reconstruction directe via segmentation_models_pytorch
+#' - PVTv2 (timm, pvt_v2_b3) : module embarqué ou code source Open-Canopy
+#'
+#' Le modèle est chargé par `init_inference_model()` au premier appel puis
+#' réutilisé : cette fonction ne fait plus que lire le raster, la passe avant
+#' et l'écriture.
+#'
+#' @param tile SpatRaster (4 bandes : R, G, B, PIR à 1.5m)
+#' @param model_path Chemin du modèle .ckpt (PyTorch Lightning)
+#' @param model_name "unet" ou "pvtv2" pour la reconstruction
+#' @param open_canopy_src Chemin vers le code source Open-Canopy (pour PVTv2)
+#' @param img_size Taille de référence du modèle (NULL = déduite de la tuile).
+#'   `run_inference()` passe la même valeur pour toutes les tuiles afin que le
+#'   modèle ne soit construit qu'une fois.
+#' @return SpatRaster CHM prédit (1 bande, en mètres)
+predict_tile <- function(tile, model_path, model_name = "pvtv2",
+                          open_canopy_src = NULL, img_size = NULL) {
+  library(reticulate)
+
+  if (is.null(img_size)) {
+    img_size <- max(nrow(tile), ncol(tile))
+  }
+  init_inference_model(model_path, model_name, open_canopy_src,
+                       num_bands = nlyr(tile), img_size = img_size)
+
+  # Sauvegarder la tuile en fichier temporaire (chemin long pour Windows)
+  tmp_dir <- normalizePath(tempdir(), winslash = "/")
+  tmp_in <- tempfile(tmpdir = tmp_dir, fileext = ".tif")
+  tmp_out <- tempfile(tmpdir = tmp_dir, fileext = ".tif")
+  writeRaster(tile, tmp_in, overwrite = TRUE)
+
+  # Normaliser les chemins pour Python sous Windows
+  tmp_in_py <- gsub("\\\\", "/", tmp_in)
+  tmp_out_py <- gsub("\\\\", "/", tmp_out)
+
+  py_code <- .PY_PREDICT_TUILE
+  py_code <- gsub("__INPUT_PATH__", tmp_in_py, py_code, fixed = TRUE)
   py_code <- gsub("__OUTPUT_PATH__", tmp_out_py, py_code, fixed = TRUE)
 
   tryCatch({
@@ -1771,7 +2002,15 @@ run_inference <- function(rvb, irc, model_path, model_name = "pvtv2",
                            model = model_name))
   }
 
-  # 4. Prédire chaque tuile. Une tuile en échec ne doit plus interrompre tout
+  # 4. Charger le modèle UNE fois pour toute la série de tuiles. La taille de
+  # référence est celle de la plus grande tuile : le réseau est ainsi identique
+  # pour toutes (les tuiles de bord, plus petites, sont paddées à leur propre
+  # multiple de 32), et le checkpoint n'est lu qu'une seule fois.
+  img_size <- max(vapply(tiles, function(tl) max(nrow(tl), ncol(tl)), numeric(1)))
+  init_inference_model(model_path, model_name, open_canopy_src,
+                       num_bands = nlyr(r_1_5m), img_size = img_size)
+
+  # 5. Prédire chaque tuile. Une tuile en échec ne doit plus interrompre tout
   # le traitement : on la signale et on continue, le recouvrement des tuiles
   # voisines comble une partie du trou.
   predictions <- list()
@@ -1787,7 +2026,8 @@ run_inference <- function(rvb, irc, model_path, model_name = "pvtv2",
                              tile_name = tile_name))
     }
     pred <- tryCatch(
-      predict_tile(tiles[[i]], model_path, model_name, open_canopy_src),
+      predict_tile(tiles[[i]], model_path, model_name, open_canopy_src,
+                   img_size = img_size),
       error = function(e) {
         warning(sprintf("Tuile %s : inférence en échec (%s)",
                         tile_name, conditionMessage(e)), call. = FALSE)
@@ -1816,7 +2056,7 @@ run_inference <- function(rvb, irc, model_path, model_name = "pvtv2",
     stop("Aucune prédiction réussie.")
   }
 
-  # 5. Mosaïquer par moyenne pondérée sur le recouvrement. terra::merge()
+  # 6. Mosaïquer par moyenne pondérée sur le recouvrement. terra::merge()
   # gardait la valeur de la première tuile dans la zone commune : la couture
   # tombait donc exactement sur les pixels de bordure, les moins fiables.
   if (length(predictions) == 1) {
@@ -1873,6 +2113,10 @@ pipeline_aoi_to_chm <- function(aoi_path,
     long_tmpdir <- normalizePath(tempdir(), winslash = "/")
     terraOptions(tempdir = long_tmpdir)
   }
+
+  # Aligner terra sur le plafond mémoire réel (cgroup) : sinon il croit tenir
+  # en RAM et se fait tuer par le cgroup au milieu du calcul des indices.
+  configurer_memoire_terra()
 
   message("##############################################################")
   message("#  Pipeline Open-Canopy : AOI → Ortho IGN → CHM prédit       #")
@@ -1971,48 +2215,62 @@ pipeline_aoi_to_chm <- function(aoi_path,
   message("CHM 0.2m: ", chm_hr_path)
 
   # --- Indices spectraux depuis IRC ---
+  # Calcul en flux, jamais en mémoire : l'ortho IRC pleine résolution fait
+  # ~233 millions de cellules, et l'algèbre raster « ordinaire » tient
+  # plusieurs couches pleine taille à la fois. Le `filename=` de lapp() force
+  # l'écriture bloc par bloc et rend le pic mémoire indépendant de
+  # l'heuristique de terra (qui, sans configurer_memoire_terra(), croit
+  # disposer de toute la RAM de la machine).
   pir   <- ortho$irc[["PIR"]]
   rouge <- ortho$irc[["Rouge"]]
   vert  <- ortho$irc[["Vert"]]
 
+  ecrire_indice <- function(couches, fonction, chemin, nom) {
+    if (file.exists(chemin)) file.remove(chemin)
+    lapp(couches, fun = fonction, filename = chemin, overwrite = TRUE,
+         wopt = list(names = nom, gdal = c("COMPRESS=LZW")))
+  }
+
   # NDVI = (PIR - Rouge) / (PIR + Rouge) — activite vegetative
-  ndvi <- (pir - rouge) / (pir + rouge)
-  names(ndvi) <- "NDVI"
   ndvi_path <- file.path(output_dir, "ndvi.tif")
-  if (file.exists(ndvi_path)) file.remove(ndvi_path)
-  writeRaster(ndvi, ndvi_path, overwrite = TRUE, gdal = c("COMPRESS=LZW"))
+  ndvi <- ecrire_indice(c(pir, rouge),
+                        function(p, r) (p - r) / (p + r),
+                        ndvi_path, "NDVI")
   message("NDVI:     ", ndvi_path)
 
   # GNDVI = (PIR - Vert) / (PIR + Vert) — chlorophylle
-  gndvi <- (pir - vert) / (pir + vert)
-  names(gndvi) <- "GNDVI"
   gndvi_path <- file.path(output_dir, "gndvi.tif")
-  if (file.exists(gndvi_path)) file.remove(gndvi_path)
-  writeRaster(gndvi, gndvi_path, overwrite = TRUE, gdal = c("COMPRESS=LZW"))
+  gndvi <- ecrire_indice(c(pir, vert),
+                         function(p, v) (p - v) / (p + v),
+                         gndvi_path, "GNDVI")
   message("GNDVI:    ", gndvi_path)
 
   # SAVI = ((PIR-R)/(PIR+R+L))*(1+L) avec L=0.5 — ajuste sol nu
   L_savi <- 0.5
-  savi <- ((pir - rouge) / (pir + rouge + L_savi)) * (1 + L_savi)
-  names(savi) <- "SAVI"
   savi_path <- file.path(output_dir, "savi.tif")
-  if (file.exists(savi_path)) file.remove(savi_path)
-  writeRaster(savi, savi_path, overwrite = TRUE, gdal = c("COMPRESS=LZW"))
+  savi <- ecrire_indice(c(pir, rouge),
+                        function(p, r) ((p - r) / (p + r + L_savi)) * (1 + L_savi),
+                        savi_path, "SAVI")
   message("SAVI:     ", savi_path)
 
   # NDWI (McFeeters) = (Vert - PIR) / (Vert + PIR) — detection eau
-  ndwi <- (vert - pir) / (vert + pir)
-  names(ndwi) <- "NDWI"
   ndwi_path <- file.path(output_dir, "ndwi.tif")
-  if (file.exists(ndwi_path)) file.remove(ndwi_path)
-  writeRaster(ndwi, ndwi_path, overwrite = TRUE, gdal = c("COMPRESS=LZW"))
+  ndwi <- ecrire_indice(c(vert, pir),
+                        function(v, p) (v - p) / (v + p),
+                        ndwi_path, "NDWI")
   message("NDWI:     ", ndwi_path)
 
   # --- CHM masque : vegetation uniquement, pas d'eau ---
   # Aligner NDVI/NDWI sur la grille du CHM 0.20m (disaggregation bilineaire
   # peut produire un leger decalage de grille vs ortho IRC natif)
-  ndvi_on_chm <- resample(ndvi, chm_hr, method = "near")
-  ndwi_on_chm <- resample(ndwi, chm_hr, method = "near")
+  # Ces deux rééchantillonnages sont eux aussi pleine résolution : les écrire
+  # explicitement évite de dépendre de l'heuristique mémoire de terra.
+  ndvi_on_chm <- resample(ndvi, chm_hr, method = "near",
+                          filename = tempfile(fileext = ".tif"),
+                          overwrite = TRUE)
+  ndwi_on_chm <- resample(ndwi, chm_hr, method = "near",
+                          filename = tempfile(fileext = ".tif"),
+                          overwrite = TRUE)
   clean_mask <- (ndvi_on_chm > ndvi_threshold) & (ndwi_on_chm <= ndwi_threshold)
   names(clean_mask) <- "mask_vegetation"
 
