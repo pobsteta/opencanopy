@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">opencanopy</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,16 @@
       <small>Source: <a href="https://github.com/pobsteta/opencanopy/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.0.3" id="opencanopy-103">opencanopy 1.0.3<a class="anchor" aria-label="anchor" href="#opencanopy-103"></a></h2>
+<p>Version de tests : le cache de modèle d’inférence, introduit en 1.0.1, est désormais couvert.</p>
+<div class="section level4">
+<h4 id="tests-1-0-3">Tests<a class="anchor" aria-label="anchor" href="#tests-1-0-3"></a></h4>
+<ul><li>
+<strong>Le cache de modèle d’inférence est testé, sans Python ni checkpoint</strong> — le travail de performance de la 1.0.1 reposait sur une non-régression manuelle et jetable, qui exigeait un checkpoint de 520 Mo et des ortho locales. Or c’est la clé du cache qui décide si le checkpoint est relu, et elle se teste sans rien de tout cela : sa construction sort dans <code><a href="../reference/dot-cle_modele_inference.html">.cle_modele_inference()</a></code>, fonction pure, et <code>reticulate</code> est mocké dans les tests — aucun interpréteur n’est démarré. Onze tests couvrent l’arrondi d’<code>img_size</code> au multiple de 32 supérieur (deux tuiles de 200 et 224 px partagent le même modèle plutôt que d’en faire reconstruire un à chaque fois), le fait que chaque composante de l’identité du modèle — checkpoint, architecture, canaux, <code>img_size</code> — change bien la clé, le non-rechargement au second appel identique, le rechargement forcé lorsque l’interpréteur Python a été relancé alors que le cache R croit encore détenir le modèle, et <strong>qu’un chargement en échec remet la clé à <code>NULL</code></strong> : sans quoi l’appel suivant sauterait le chargement et <code><a href="../reference/predict_tile.html">predict_tile()</a></code> partirait sur un <code>_OC_MODEL</code> inexistant.</li>
+</ul><p>La suite passe de 57 à 72 tests, la couverture de 7 % à 9 %.</p>
+</div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.0.2" id="opencanopy-102">opencanopy 1.0.2<a class="anchor" aria-label="anchor" href="#opencanopy-102"></a></h2>
 <p>Version d’hygiène : <code>R CMD check</code> passe de six avertissements et trois NOTE à <code>Status: OK</code>.</p>

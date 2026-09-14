@@ -1,5 +1,34 @@
 # Changelog
 
+## opencanopy 1.0.3
+
+Version de tests : le cache de modèle d’inférence, introduit en 1.0.1,
+est désormais couvert.
+
+#### Tests
+
+- **Le cache de modèle d’inférence est testé, sans Python ni
+  checkpoint** — le travail de performance de la 1.0.1 reposait sur une
+  non-régression manuelle et jetable, qui exigeait un checkpoint de 520
+  Mo et des ortho locales. Or c’est la clé du cache qui décide si le
+  checkpoint est relu, et elle se teste sans rien de tout cela : sa
+  construction sort dans
+  [`.cle_modele_inference()`](https://pobsteta.github.io/opencanopy/reference/dot-cle_modele_inference.md),
+  fonction pure, et `reticulate` est mocké dans les tests — aucun
+  interpréteur n’est démarré. Onze tests couvrent l’arrondi d’`img_size`
+  au multiple de 32 supérieur (deux tuiles de 200 et 224 px partagent le
+  même modèle plutôt que d’en faire reconstruire un à chaque fois), le
+  fait que chaque composante de l’identité du modèle — checkpoint,
+  architecture, canaux, `img_size` — change bien la clé, le
+  non-rechargement au second appel identique, le rechargement forcé
+  lorsque l’interpréteur Python a été relancé alors que le cache R croit
+  encore détenir le modèle, et **qu’un chargement en échec remet la clé
+  à `NULL`** : sans quoi l’appel suivant sauterait le chargement et
+  [`predict_tile()`](https://pobsteta.github.io/opencanopy/reference/predict_tile.md)
+  partirait sur un `_OC_MODEL` inexistant.
+
+La suite passe de 57 à 72 tests, la couverture de 7 % à 9 %.
+
 ## opencanopy 1.0.2
 
 Version d’hygiène : `R CMD check` passe de six avertissements et trois
