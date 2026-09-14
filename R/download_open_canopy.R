@@ -59,6 +59,7 @@ MILLESIME_IRC   <- NULL
 #' @param type "ortho" ou "irc"
 #' @param millesime Année (chaîne ou numérique), NULL pour la couche courante
 #' @return Nom de couche WMS IGN
+#' @keywords internal
 ign_layer_name <- function(type = c("ortho", "irc"), millesime = NULL) {
   type <- match.arg(type)
   if (is.null(millesime)) {

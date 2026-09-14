@@ -1,6 +1,6 @@
 Package: opencanopy
 Title: Open-Canopy - Canopy Height Estimation from IGN Ortho + SPOT Models
-Version: 1.0.0
+Version: 1.0.1
 Authors@R:
     person("Pascal", "Obstetar", , "pascal.obstetar@gmail.com", role = c("aut", "cre"))
 Description: Interface R pour le dataset Open-Canopy de AI4Forest. Open-Canopy
@@ -14,7 +14,6 @@ Description: Interface R pour le dataset Open-Canopy de AI4Forest. Open-Canopy
 License: file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
 Depends:
     R (>= 4.1.0)
 Imports:
@@ -34,5 +33,6 @@ Suggests:
     patchwork,
     hfhub
 VignetteBuilder: knitr
-URL: https://github.com/pobsteta/open_canopy_nemeton
-BugReports: https://github.com/pobsteta/open_canopy_nemeton/issues
+URL: https://github.com/pobsteta/opencanopy, https://pobsteta.github.io/opencanopy/
+BugReports: https://github.com/pobsteta/opencanopy/issues
+Config/roxygen2/version: 8.1.0

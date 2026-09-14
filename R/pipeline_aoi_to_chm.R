@@ -555,6 +555,7 @@ download_ortho_for_aoi <- function(aoi, output_dir, res_m = RES_IGN,
 #'
 #' @param ign_raster SpatRaster à 0.20m
 #' @return SpatRaster à ~1.5m
+#' @keywords internal
 resample_to_spot <- function(ign_raster) {
   current_res <- res(ign_raster)[1]
   agg_factor <- round(RES_SPOT / current_res)
@@ -1086,6 +1087,7 @@ download_open_canopy_src <- function(dest = NULL, force = FALSE) {
 #' @param overlap Chevauchement en mètres
 #' @return Liste nommée de SpatRasters, portant les attributs `margin_x` et
 #'   `margin_y` (largeur du fondu, en pixels)
+#' @keywords internal
 make_inference_tiles <- function(r, tile_size = 1000, overlap = 200) {
   res_x <- res(r)[1]
   res_y <- res(r)[2]
@@ -1837,6 +1839,7 @@ print("Prediction sauvegardee")
 #' @param num_bands Nombre de canaux d'entrée (4 : R, G, B, PIR)
 #' @param img_size Taille de référence du modèle (multiple de 32)
 #' @return TRUE si le modèle a été (re)construit, FALSE s'il était déjà chargé
+#' @keywords internal
 init_inference_model <- function(model_path, model_name = "pvtv2",
                                   open_canopy_src = NULL,
                                   num_bands = 4L, img_size = 640L) {
@@ -1898,6 +1901,7 @@ init_inference_model <- function(model_path, model_name = "pvtv2",
 #'   `run_inference()` passe la même valeur pour toutes les tuiles afin que le
 #'   modèle ne soit construit qu'une fois.
 #' @return SpatRaster CHM prédit (1 bande, en mètres)
+#' @keywords internal
 predict_tile <- function(tile, model_path, model_name = "pvtv2",
                           open_canopy_src = NULL, img_size = NULL) {
   library(reticulate)
@@ -1946,6 +1950,7 @@ predict_tile <- function(tile, model_path, model_name = "pvtv2",
 #' @param rvb SpatRaster ortho RVB (3 bandes : Rouge, Vert, Bleu)
 #' @param irc SpatRaster ortho IRC (3 bandes : PIR, Rouge, Vert)
 #' @return SpatRaster 4 bandes (Rouge, Vert, Bleu, PIR)
+#' @keywords internal
 combine_rvb_irc <- function(rvb, irc) {
   message("Combinaison RVB + PIR en image 4 bandes...")
 
@@ -1977,6 +1982,7 @@ combine_rvb_irc <- function(rvb, irc) {
 #' @param tile_size Taille des tuiles en mètres
 #' @param overlap Chevauchement entre tuiles en mètres (fondu au recollement)
 #' @return SpatRaster CHM prédit
+#' @keywords internal
 run_inference <- function(rvb, irc, model_path, model_name = "pvtv2",
                            tile_size = 1000, overlap = 200,
                            open_canopy_src = NULL,

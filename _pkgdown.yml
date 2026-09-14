@@ -1,4 +1,4 @@
-url: https://pobsteta.github.io/opencanopynemeton/
+url: https://pobsteta.github.io/opencanopy/
 template:
   bootstrap: 5
   bootswatch: flatly
@@ -14,7 +14,7 @@ home:
     Pipeline AOI -> CHM + indices spectraux (NDVI, GNDVI, SAVI, NDWI) + CHM masque.
   links:
   - text: Voir sur GitHub
-    href: https://github.com/pobsteta/opencanopynemeton
+    href: https://github.com/pobsteta/opencanopy
   - text: Dataset Open-Canopy (HF)
     href: https://huggingface.co/datasets/AI4Forest/Open-Canopy
 
@@ -72,3 +72,8 @@ reference:
   contents:
   - starts_with("plot_")
   - export_to_gpkg
+
+- title: "Utilitaires geospatiaux"
+  desc: "Helpers de projection et de rattachement du CRS."
+  contents:
+  - ancrer_crs_l93

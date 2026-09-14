@@ -1,0 +1,63 @@
+# Publie la Release GitHub a partir du tag. Sans ce workflow, les tags etaient
+# pousses sans jamais donner lieu a une Release : v0.1.2 et v1.0.0 sont restees
+# invisibles sur la page du depot, qui affichait encore v0.1.1.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag a publier (ex. v1.0.1)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determiner la version
+        id: version
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verifier que DESCRIPTION correspond au tag
+        run: |
+          DESC=$(grep '^Version:' DESCRIPTION | sed 's/^Version:[[:space:]]*//')
+          if [ "$DESC" != "${{ steps.version.outputs.version }}" ]; then
+            echo "::error::DESCRIPTION indique $DESC, le tag ${{ steps.version.outputs.version }}"
+            exit 1
+          fi
+
+      - name: Extraire la section NEWS.md
+        run: |
+          awk -v v="${{ steps.version.outputs.version }}" '
+            $0 ~ "^# opencanopy " v "([ ]|$)" { on = 1; next }
+            on && /^# opencanopy / { exit }
+            on { print }
+          ' NEWS.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "Pas de section NEWS.md pour cette version." > notes.md
+          fi
+          cat notes.md
+
+      - name: Publier la Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          TITRE="opencanopy ${{ steps.version.outputs.version }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TITRE" --notes-file notes.md
+          else
+            gh release create "$TAG" --title "$TITRE" --notes-file notes.md --verify-tag
+          fi

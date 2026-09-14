@@ -121,7 +121,9 @@ jobs:
       - name: Install R dependencies
         uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::covr, any::remotes
+          # xml2 est requis par covr::to_cobertura() ; c'est un Suggests de
+          # covr, donc ni extra-packages ni `needs: coverage` ne le tirent.
+          extra-packages: any::covr, any::remotes, any::xml2
           needs: coverage
 
       - name: Compute coverage

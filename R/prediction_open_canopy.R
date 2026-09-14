@@ -582,6 +582,17 @@ upsample_chm_to_ign <- function(chm_predicted, target_res = RES_IGN,
 # 6. Export
 # ==============================================================================
 
+#' Exporter une liste de rasters vers un GeoPackage
+#'
+#' Chaque couche binaire (valeurs dans {0, 1}) est vectorisée puis écrite comme
+#' couche du GeoPackage ; les autres sont écrites en GeoTIFF à côté, un raster
+#' continu n'ayant pas de représentation vectorielle utile.
+#'
+#' @param raster_list Liste nommée de SpatRaster ; les noms deviennent les noms
+#'   de couches du GeoPackage
+#' @param filename Nom du fichier GeoPackage produit
+#' @param output_dir Répertoire de sortie
+#' @return Invisible `NULL`, appelée pour son effet de bord (écriture disque)
 export_to_gpkg <- function(raster_list, filename = "results.gpkg",
                             output_dir = OUTPUT_DIR) {
   out_path <- file.path(output_dir, filename)

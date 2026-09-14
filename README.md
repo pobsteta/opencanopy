@@ -1,10 +1,10 @@
 # opencanopy — Ortho IGN 0.20m + modèles Open-Canopy (SPOT 1.5m)
 
 <!-- badges: start -->
-[![R-CMD-check](https://github.com/pobsteta/opencanopynemeton/actions/workflows/r.yml/badge.svg)](https://github.com/pobsteta/opencanopynemeton/actions/workflows/r.yml)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg?logo=github)](https://github.com/pobsteta/opencanopynemeton)
-[![pkgdown](https://github.com/pobsteta/opencanopynemeton/actions/workflows/pkgdown.yaml/badge.svg)](https://pobsteta.github.io/opencanopynemeton/)
-[![codecov](https://codecov.io/gh/pobsteta/opencanopynemeton/graph/badge.svg)](https://codecov.io/gh/pobsteta/opencanopynemeton)
+[![R-CMD-check](https://github.com/pobsteta/opencanopy/actions/workflows/r.yml/badge.svg)](https://github.com/pobsteta/opencanopy/actions/workflows/r.yml)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg?logo=github)](https://github.com/pobsteta/opencanopy)
+[![pkgdown](https://github.com/pobsteta/opencanopy/actions/workflows/pkgdown.yaml/badge.svg)](https://pobsteta.github.io/opencanopy/)
+[![codecov](https://codecov.io/gh/pobsteta/opencanopy/graph/badge.svg)](https://codecov.io/gh/pobsteta/opencanopy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?logo=opensourceinitiative)](https://opensource.org/licenses/MIT)
 <!-- badges: end -->
 
