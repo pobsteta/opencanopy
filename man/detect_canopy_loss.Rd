@@ -6,6 +6,18 @@
 \usage{
 detect_canopy_loss(chm_t1, chm_t2, threshold = -5)
 }
+\arguments{
+\item{chm_t1}{SpatRaster du CHM à la première date}
+
+\item{chm_t2}{SpatRaster du CHM à la seconde date, rééchantillonné sur
+\code{chm_t1} si les géométries diffèrent}
+
+\item{threshold}{Seuil de variation, en mètres ; négatif, une perte étant une
+diminution de hauteur}
+}
+\value{
+SpatRaster booléen, TRUE là où la perte dépasse le seuil
+}
 \description{
 Détection de perte de canopée
 }

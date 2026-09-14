@@ -22,7 +22,8 @@ library(fs)
 DATA_DIR     <- file.path(getwd(), "data")
 DATA_DIR_IGN <- file.path(DATA_DIR, "ign")
 OUTPUT_DIR   <- file.path(getwd(), "outputs")
-dir_create(OUTPUT_DIR)
+# Pas de dir_create() ici : au chargement du package cela creerait outputs/
+# dans le repertoire courant, quel qu'il soit. Cf. les fonctions d'export.
 
 RES_SPOT <- 1.5  # Résolution des modèles Open-Canopy
 RES_IGN  <- 0.2  # Résolution des ortho IGN
@@ -70,15 +71,14 @@ setup_conda_env <- function(envname = CONDA_ENV, install_missing = FALSE) {
   if (!requireNamespace("reticulate", quietly = TRUE)) {
     install.packages("reticulate")
   }
-  library(reticulate)
 
   # Utiliser l'environnement conda existant (miniforge)
-  use_condaenv(envname, required = TRUE)
-  message("Environnement conda configuré: ", envname)
+  reticulate::use_condaenv(envname, required = TRUE)
+  message("Environnement conda configur\u00e9: ", envname)
 
   # Vérifier la liste complète des modules requis par le pipeline
   modules   <- names(OPEN_CANOPY_PY_MODULES)
-  available <- vapply(modules, py_module_available, logical(1))
+  available <- vapply(modules, reticulate::py_module_available, logical(1))
   for (i in seq_along(modules)) {
     message(sprintf("  %s: %s", modules[i],
                     ifelse(available[i], "OK", "MANQUANT")))
@@ -90,11 +90,11 @@ setup_conda_env <- function(envname = CONDA_ENV, install_missing = FALSE) {
     if (isTRUE(install_missing)) {
       message("Installation des modules manquants (pip): ",
               paste(pip_pkgs, collapse = ", "))
-      py_install(pip_pkgs, envname = envname, pip = TRUE)
+      reticulate::py_install(pip_pkgs, envname = envname, pip = TRUE)
     } else {
       warning(sprintf(
         paste0("Modules Python manquants dans '%s' : %s.\n",
-               "Réparez avec setup_conda_env(install_missing = TRUE), ou :\n",
+               "R\u00e9parez avec setup_conda_env(install_missing = TRUE), ou :\n",
                "  python -m pip install %s"),
         envname, paste(missing, collapse = ", "),
         paste(pip_pkgs, collapse = " ")), call. = FALSE)
@@ -155,11 +155,11 @@ download_pretrained_model <- function(model_name = "pvtv2") {
   )
 
   if (!model_name %in% names(model_files)) {
-    stop("Modèle inconnu: ", model_name,
+    stop("Mod\u00e8le inconnu: ", model_name,
          ". Choisir parmi: ", paste(names(model_files), collapse = ", "))
   }
 
-  message("Téléchargement du modèle ", model_name, "...")
+  message("T\u00e9l\u00e9chargement du mod\u00e8le ", model_name, "...")
   message("Depuis: ", repo_id)
 
   # --- Méthode 1 : hfhub R natif (préféré) ---
@@ -168,20 +168,19 @@ download_pretrained_model <- function(model_name = "pvtv2") {
     if (is.null(ckpt_name)) {
       ckpt_name <- model_files[[model_name]]
     }
-    message("  Téléchargement via hfhub (R natif): ", ckpt_name)
+    message("  T\u00e9l\u00e9chargement via hfhub (R natif): ", ckpt_name)
     tryCatch({
       local_path <- hfhub::hub_download(repo_id, ckpt_name,
                                           repo_type = "dataset")
-      message("  Modèle téléchargé: ", local_path)
+      message("  Mod\u00e8le t\u00e9l\u00e9charg\u00e9: ", local_path)
       return(local_path)
     }, error = function(e) {
-      message("  hfhub échoué: ", e$message, " \u2192 fallback Python")
+      message("  hfhub \u00e9chou\u00e9: ", e$message, " \u2192 fallback Python")
     })
   }
 
   # --- Méthode 2 : Python huggingface_hub (fallback) ---
-  library(reticulate)
-  hf_hub <- import("huggingface_hub")
+  hf_hub <- reticulate::import("huggingface_hub")
 
   filename <- model_files[[model_name]]
   tryCatch({
@@ -190,10 +189,10 @@ download_pretrained_model <- function(model_name = "pvtv2") {
       filename = filename,
       repo_type = "dataset"
     )
-    message("  Modèle téléchargé: ", local_path)
+    message("  Mod\u00e8le t\u00e9l\u00e9charg\u00e9: ", local_path)
     return(local_path)
   }, error = function(e) {
-    stop("Échec du téléchargement: ", e$message, call. = FALSE)
+    stop("\u00c9chec du t\u00e9l\u00e9chargement: ", e$message, call. = FALSE)
   })
 }
 
@@ -216,7 +215,7 @@ resample_ign_to_spot <- function(ign_raster, target_res = RES_SPOT,
   current_res <- res(ign_raster)[1]
   agg_factor <- round(target_res / current_res)
 
-  message(sprintf("Rééchantillonnage IGN: %.2fm → %.2fm (facteur %dx)",
+  message(sprintf("R\u00e9\u00e9chantillonnage IGN: %.2fm \u2192 %.2fm (facteur %dx)",
                    current_res, target_res, agg_factor))
   message(sprintf("  Avant: %d x %d pixels (%d)",
                    nrow(ign_raster), ncol(ign_raster), ncell(ign_raster)))
@@ -224,7 +223,7 @@ resample_ign_to_spot <- function(ign_raster, target_res = RES_SPOT,
   r_resampled <- aggregate(ign_raster, fact = agg_factor, fun = method,
                              na.rm = TRUE)
 
-  message(sprintf("  Après: %d x %d pixels (%d)",
+  message(sprintf("  Apr\u00e8s: %d x %d pixels (%d)",
                    nrow(r_resampled), ncol(r_resampled), ncell(r_resampled)))
 
   return(r_resampled)
@@ -256,7 +255,7 @@ tile_for_inference <- function(ign_raster, tile_size = 1000, overlap = 0) {
     }
   }
 
-  message(sprintf("%d tuile(s) de %dm x %dm créée(s)", length(tiles),
+  message(sprintf("%d tuile(s) de %dm x %dm cr\u00e9\u00e9e(s)", length(tiles),
                    tile_size, tile_size))
   return(tiles)
 }
@@ -264,8 +263,8 @@ tile_for_inference <- function(ign_raster, tile_size = 1000, overlap = 0) {
 #' Préparer une tuile IGN pour le modèle Open-Canopy
 #'
 #' Normalisation des valeurs et conversion en format attendu.
-#' Les images SPOT Open-Canopy sont en réflectance [0, 1] ou [0, 10000].
-#' Les ortho IGN sont en radiométrie 8-bit [0, 255].
+#' Les images SPOT Open-Canopy sont en réflectance `[0, 1]` ou `[0, 10000]`.
+#' Les ortho IGN sont en radiométrie 8-bit `[0, 255]`.
 #'
 #' @param tile SpatRaster d'une tuile
 #' @param normalize_to Plage cible ("0_1" ou "0_10000")
@@ -308,12 +307,12 @@ normalize_for_model <- function(tile, normalize_to = "0_1") {
 #' @param output_path Chemin de sortie
 #' @return Chemin du fichier de prédiction
 run_inference_python <- function(tile_path, model_path, output_path = NULL) {
-  library(reticulate)
 
   if (is.null(output_path)) {
     output_path <- file.path(OUTPUT_DIR,
                               paste0("pred_", basename(tile_path)))
   }
+  dir_create(dirname(output_path))
 
   # Script Python inline pour l'inference
   py_code <- '
@@ -348,11 +347,11 @@ profile.update(count=1, dtype="float32")
   py_code <- gsub("__TILE_PATH__", gsub("\\\\", "/", tile_path), py_code, fixed = TRUE)
 
   tryCatch({
-    py_run_string(py_code)
-    message("Inférence terminée: ", output_path)
+    reticulate::py_run_string(py_code)
+    message("Inf\u00e9rence termin\u00e9e: ", output_path)
     return(output_path)
   }, error = function(e) {
-    warning("Erreur d'inférence: ", e$message)
+    warning("Erreur d'inf\u00e9rence: ", e$message)
     return(NULL)
   })
 }
@@ -364,7 +363,7 @@ profile.update(count=1, dtype="float32")
 #' @param ign_type "rvb" ou "irc"
 #' @return SpatRaster des prédictions mosaïquées
 predict_chm_from_ign <- function(ign_path, model_path, ign_type = "rvb") {
-  message("=== Pipeline : Ortho IGN → CHM prédit ===")
+  message("=== Pipeline : Ortho IGN \u2192 CHM pr\u00e9dit ===")
   message(sprintf("Image: %s (%s, %.2fm)", basename(ign_path),
                    toupper(ign_type), RES_IGN))
 
@@ -399,7 +398,7 @@ predict_chm_from_ign <- function(ign_path, model_path, ign_type = "rvb") {
     unlink(tmp_path)
   }
 
-  message("=== Pipeline terminé ===")
+  message("=== Pipeline termin\u00e9 ===")
   return(pred_paths)
 }
 
@@ -408,9 +407,13 @@ predict_chm_from_ign <- function(ign_path, model_path, ign_type = "rvb") {
 # ==============================================================================
 
 #' Charger les prédictions
+#'
+#' @param prediction_path Chemin d'un fichier de prédiction, ou d'un répertoire
+#'   dont les .tif seront tous chargés
+#' @return SpatRaster, ou liste de SpatRaster si `prediction_path` est un dossier
 load_predictions <- function(prediction_path) {
   pred <- rast(prediction_path)
-  message(sprintf("Prédictions: %s (%d x %d, %.2fm)",
+  message(sprintf("Pr\u00e9dictions: %s (%d x %d, %.2fm)",
                    basename(prediction_path), nrow(pred), ncol(pred), res(pred)[1]))
   return(pred)
 }
@@ -466,13 +469,21 @@ evaluate_predictions <- function(prediction, reference, max_cells = 1e6) {
     n_pixels = as.numeric(g[1, "notNA"])
   )
 
-  message("=== Métriques ===")
-  message(sprintf("  MAE: %.3fm | RMSE: %.3fm | Biais: %.3fm | R²: %.4f",
+  message("=== M\u00e9triques ===")
+  message(sprintf("  MAE: %.3fm | RMSE: %.3fm | Biais: %.3fm | R\u00b2: %.4f",
                    mae, rmse, bias, r_squared))
   return(metrics)
 }
 
 #' Visualiser la comparaison prédiction vs référence
+#'
+#' @param prediction SpatRaster du CHM prédit
+#' @param reference SpatRaster du CHM de référence (LiDAR)
+#' @param metrics Liste de métriques à afficher, telle que renvoyée par
+#'   [evaluate_predictions()] ; `NULL` pour ne rien annoter
+#' @param tile_name Nom de la tuile, repris dans les titres
+#' @param n_points Nombre de cellules échantillonnées pour le nuage de points
+#' @return Invisible `NULL`, appelée pour son effet de bord (tracé)
 plot_prediction_comparison <- function(prediction, reference, metrics = NULL,
                                         tile_name = "", n_points = 50000) {
   par(mfrow = c(2, 2), mar = c(2, 2, 3, 4))
@@ -481,9 +492,9 @@ plot_prediction_comparison <- function(prediction, reference, metrics = NULL,
     c("#f7fcb9", "#addd8e", "#41ab5d", "#006837", "#004529")
   )(100)
 
-  plot(prediction, main = paste("Prédiction", tile_name),
+  plot(prediction, main = paste("Pr\u00e9diction", tile_name),
        col = col_chm, plg = list(title = "H (m)"))
-  plot(reference, main = paste("Référence LiDAR", tile_name),
+  plot(reference, main = paste("R\u00e9f\u00e9rence LiDAR", tile_name),
        col = col_chm, plg = list(title = "H (m)"))
 
   if (!is.null(metrics)) {
@@ -509,9 +520,9 @@ plot_prediction_comparison <- function(prediction, reference, metrics = NULL,
 
     plot(ech[[2]], ech[[1]],
          pch = ".", col = rgb(0, 0.5, 0, 0.1),
-         main = sprintf("Pred vs Ref (R²=%.3f, MAE=%.2fm)",
+         main = sprintf("Pred vs Ref (R\u00b2=%.3f, MAE=%.2fm)",
                          metrics$r_squared, metrics$mae),
-         xlab = "Référence (m)", ylab = "Prédiction (m)")
+         xlab = "R\u00e9f\u00e9rence (m)", ylab = "Pr\u00e9diction (m)")
     abline(0, 1, col = "red", lwd = 2)
   }
 
@@ -523,11 +534,22 @@ plot_prediction_comparison <- function(prediction, reference, metrics = NULL,
 # ==============================================================================
 
 #' Statistiques zonales
+#'
+#' @param chm_raster SpatRaster du CHM
+#' @param zones SpatVector des zones d'agrégation
+#' @param fun Fonction d'agrégation passée à [terra::zonal()] (ex. "mean")
+#' @return data.frame d'une ligne par zone
 zonal_canopy_stats <- function(chm_raster, zones, fun = "mean") {
   extract(chm_raster, zones, fun = fun, na.rm = TRUE)
 }
 
 #' Couverture forestière par grille
+#'
+#' @param chm_raster SpatRaster du CHM
+#' @param cell_size Côté de la maille en mètres
+#' @param height_threshold Hauteur minimale, en mètres, pour compter une cellule
+#'   comme forestière
+#' @return SpatRaster de la fraction forestière par maille, dans `[0, 1]`
 compute_forest_cover_grid <- function(chm_raster, cell_size = 100,
                                        height_threshold = 2) {
   forest_mask <- chm_raster >= height_threshold
@@ -543,6 +565,13 @@ compute_forest_cover_grid <- function(chm_raster, cell_size = 100,
 }
 
 #' Détection de perte de canopée
+#'
+#' @param chm_t1 SpatRaster du CHM à la première date
+#' @param chm_t2 SpatRaster du CHM à la seconde date, rééchantillonné sur
+#'   `chm_t1` si les géométries diffèrent
+#' @param threshold Seuil de variation, en mètres ; négatif, une perte étant une
+#'   diminution de hauteur
+#' @return SpatRaster booléen, TRUE là où la perte dépasse le seuil
 detect_canopy_loss <- function(chm_t1, chm_t2, threshold = -5) {
   if (!compareGeom(chm_t1, chm_t2, stopOnError = FALSE)) {
     chm_t2 <- resample(chm_t2, chm_t1, method = "bilinear")
@@ -554,7 +583,7 @@ detect_canopy_loss <- function(chm_t1, chm_t2, threshold = -5) {
   # global("sum") streame : values() sur un masque plein resolution coute des Go.
   loss_area <- as.numeric(global(loss, "sum", na.rm = TRUE)) *
                prod(res(chm_t1)) / 10000
-  message(sprintf("Perte détectée: %.2f ha (seuil: %dm)", loss_area, threshold))
+  message(sprintf("Perte d\u00e9tect\u00e9e: %.2f ha (seuil: %dm)", loss_area, threshold))
   return(loss)
 }
 
@@ -569,12 +598,12 @@ upsample_chm_to_ign <- function(chm_predicted, target_res = RES_IGN,
   current_res <- res(chm_predicted)[1]
   disagg_factor <- round(current_res / target_res)
 
-  message(sprintf("Suréchantillonnage CHM: %.2fm → %.2fm (facteur %dx)",
+  message(sprintf("Sur\u00e9chantillonnage CHM: %.2fm \u2192 %.2fm (facteur %dx)",
                    current_res, target_res, disagg_factor))
 
   chm_hr <- disagg(chm_predicted, fact = disagg_factor, method = method)
 
-  message(sprintf("  Résultat: %d x %d pixels", nrow(chm_hr), ncol(chm_hr)))
+  message(sprintf("  R\u00e9sultat: %d x %d pixels", nrow(chm_hr), ncol(chm_hr)))
   return(chm_hr)
 }
 
@@ -584,7 +613,7 @@ upsample_chm_to_ign <- function(chm_predicted, target_res = RES_IGN,
 
 #' Exporter une liste de rasters vers un GeoPackage
 #'
-#' Chaque couche binaire (valeurs dans {0, 1}) est vectorisée puis écrite comme
+#' Chaque couche binaire (valeurs valant 0 ou 1) est vectorisée puis écrite comme
 #' couche du GeoPackage ; les autres sont écrites en GeoTIFF à côté, un raster
 #' continu n'ayant pas de représentation vectorielle utile.
 #'
@@ -595,6 +624,7 @@ upsample_chm_to_ign <- function(chm_predicted, target_res = RES_IGN,
 #' @return Invisible `NULL`, appelée pour son effet de bord (écriture disque)
 export_to_gpkg <- function(raster_list, filename = "results.gpkg",
                             output_dir = OUTPUT_DIR) {
+  dir_create(output_dir)
   out_path <- file.path(output_dir, filename)
 
   for (i in seq_along(raster_list)) {
@@ -612,7 +642,7 @@ export_to_gpkg <- function(raster_list, filename = "results.gpkg",
     }
   }
 
-  message("Résultats exportés: ", out_path)
+  message("R\u00e9sultats export\u00e9s: ", out_path)
 }
 
 # ==============================================================================
@@ -620,27 +650,27 @@ export_to_gpkg <- function(raster_list, filename = "results.gpkg",
 # ==============================================================================
 
 if (sys.nframe() == 0) {
-  message("=== Open-Canopy : Prédiction CHM depuis images IGN (0.20m) ===\n")
+  message("=== Open-Canopy : Pr\u00e9diction CHM depuis images IGN (0.20m) ===\n")
   message("Workflow :")
-  message("  1. Ortho IGN (RVB/IRC) à 0.20m")
-  message("  2. Agrégation à 1.5m (résolution SPOT)")
-  message("  3. Inférence UNet/PVTv2 (conda: open_canopy)")
+  message("  1. Ortho IGN (RVB/IRC) \u00e0 0.20m")
+  message("  2. Agr\u00e9gation \u00e0 1.5m (r\u00e9solution SPOT)")
+  message("  3. Inf\u00e9rence UNet/PVTv2 (conda: open_canopy)")
   message("  4. Post-traitement et analyse en R\n")
 
   message("--- Configuration ---")
-  message(sprintf("  Résolution IGN:  %.2f m (%d pixels/km²)",
+  message(sprintf("  R\u00e9solution IGN:  %.2f m (%d pixels/km\u00b2)",
                    RES_IGN, as.integer((1000 / RES_IGN)^2)))
-  message(sprintf("  Résolution SPOT: %.1f m  (%d pixels/km²)",
+  message(sprintf("  R\u00e9solution SPOT: %.1f m  (%d pixels/km\u00b2)",
                    RES_SPOT, as.integer((1000 / RES_SPOT)^2)))
   message(sprintf("  Env. conda:      %s", CONDA_ENV))
 
   # Vérifier l'environnement conda
   tryCatch({
     setup_conda_env()
-    message("\nEnvironnement Python opérationnel.")
+    message("\nEnvironnement Python op\u00e9rationnel.")
   }, error = function(e) {
     message("\nEnvironnement conda non disponible: ", e$message)
-    message("Assurez-vous que miniforge et l'env 'open_canopy' sont installés.")
+    message("Assurez-vous que miniforge et l'env 'open_canopy' sont install\u00e9s.")
   })
 
   # Rechercher des images IGN
@@ -649,14 +679,14 @@ if (sys.nframe() == 0) {
   }))
 
   if (length(ign_files) > 0) {
-    message(sprintf("\n%d image(s) IGN trouvée(s):", length(ign_files)))
+    message(sprintf("\n%d image(s) IGN trouv\u00e9e(s):", length(ign_files)))
     for (f in ign_files) {
       message(sprintf("  %s (%.1f Mo)", basename(f), file.size(f) / 1024^2))
     }
   } else {
-    message("\nAucune image IGN trouvée dans: ", DATA_DIR_IGN)
-    message("Placez vos fichiers ortho IGN (.jp2 ou .tif) dans ce répertoire.")
-    message("\nDémonstration avec données simulées...\n")
+    message("\nAucune image IGN trouv\u00e9e dans: ", DATA_DIR_IGN)
+    message("Placez vos fichiers ortho IGN (.jp2 ou .tif) dans ce r\u00e9pertoire.")
+    message("\nD\u00e9monstration avec donn\u00e9es simul\u00e9es...\n")
 
     # Simulation
     set.seed(42)
@@ -680,12 +710,12 @@ if (sys.nframe() == 0) {
     forest_cover <- compute_forest_cover_grid(ref, cell_size = 50)
 
     pdf(file.path(OUTPUT_DIR, "demo_forest_cover.pdf"), width = 8, height = 8)
-    plot(forest_cover, main = "Couverture forestière (%)",
+    plot(forest_cover, main = "Couverture foresti\u00e8re (%)",
          col = colorRampPalette(c("#fff7bc", "#41ab5d", "#004529"))(100))
     dev.off()
 
     message("Graphiques: ", OUTPUT_DIR)
   }
 
-  message("\n=== Terminé ===")
+  message("\n=== Termin\u00e9 ===")
 }

@@ -11,6 +11,19 @@ plot_chm_histogram(
   max_cells = 1e+06
 )
 }
+\arguments{
+\item{chm_raster}{SpatRaster du CHM}
+
+\item{title}{Titre du graphique}
+
+\item{n_breaks}{Nombre de classes de l'histogramme}
+
+\item{max_cells}{Nombre maximal de cellules échantillonnées : au-delà, le
+raster est sous-échantillonné plutôt que rapatrié en mémoire}
+}
+\value{
+Invisible \code{NULL}, appelée pour son effet de bord (tracé)
+}
 \description{
 Histogramme des hauteurs de canopée
 }

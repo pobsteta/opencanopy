@@ -23,6 +23,9 @@ download_ortho_for_aoi(
 \item{millesime_ortho}{Millésime ortho RVB (NULL = plus récent)}
 
 \item{millesime_irc}{Millésime IRC (NULL = plus récent)}
+
+\item{progress_callback}{Fonction appelée à chaque étape avec une liste
+décrivant l'avancement ; \code{NULL} pour ne rien émettre}
 }
 \value{
 Liste avec rvb, irc (SpatRaster) et millésimes utilisés

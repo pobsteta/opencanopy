@@ -14,3 +14,6 @@
 ^CLAUDE\.md$
 ^cran-comments\.md$
 ^codecov\.yml$
+
+# Configuration locale Claude Code
+^\.claude$

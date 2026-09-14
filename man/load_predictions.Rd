@@ -6,6 +6,13 @@
 \usage{
 load_predictions(prediction_path)
 }
+\arguments{
+\item{prediction_path}{Chemin d'un fichier de prédiction, ou d'un répertoire
+dont les .tif seront tous chargés}
+}
+\value{
+SpatRaster, ou liste de SpatRaster si \code{prediction_path} est un dossier
+}
 \description{
 Charger les prédictions
 }

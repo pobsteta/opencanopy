@@ -9,6 +9,14 @@ hf_git_clone(
   token = HF_TOKEN
 )
 }
+\arguments{
+\item{dest_dir}{Répertoire de destination du clone}
+
+\item{token}{Jeton Hugging Face, inséré dans l'URL pour un dépôt privé}
+}
+\value{
+Chemin du dépôt cloné
+}
 \description{
 Cloner le dataset complet via git (nécessite git-lfs)
 }

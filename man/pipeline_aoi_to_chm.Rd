@@ -36,6 +36,13 @@ le module embarqué timmnet_standalone est utilisé par défaut)}
 \item{millesime_ortho}{Millésime ortho RVB (NULL = plus récent)}
 
 \item{millesime_irc}{Millésime IRC (NULL = plus récent)}
+
+\item{ndvi_threshold}{Seuil NDVI au-dessus duquel une cellule est végétale}
+
+\item{ndwi_threshold}{Seuil NDWI au-dessous duquel une cellule n'est pas de l'eau}
+
+\item{progress_callback}{Fonction appelée à chaque étape avec une liste
+décrivant l'avancement ; \code{NULL} pour ne rien émettre}
 }
 \value{
 Liste avec tous les résultats

@@ -78,7 +78,10 @@ ign_layer_name <- function(type = c("ortho", "irc"), millesime = NULL) {
 DATA_DIR     <- file.path(getwd(), "data")
 DATA_DIR_HF  <- file.path(DATA_DIR, "open_canopy")
 DATA_DIR_IGN <- file.path(DATA_DIR, "ign")
-dir_create(c(DATA_DIR, DATA_DIR_HF, DATA_DIR_IGN))
+# Pas de dir_create() ici : ce code s'execute au chargement du package, donc a
+# l'installation, et creait data/ign et data/open_canopy dans le repertoire de
+# build (R CMD check : "Subdirectory 'data' contains no data sets"). Les
+# repertoires sont crees par les fonctions qui ecrivent dedans.
 
 # --- Résolutions ---
 RES_SPOT <- 1.5  # Résolution SPOT 6-7 (Open-Canopy)
@@ -142,7 +145,7 @@ hf_download_file <- function(repo_id, filename, dest_dir, token = "",
   local_path <- file.path(dest_dir, filename)
 
   if (file.exists(local_path) && !overwrite) {
-    message("Fichier déjà présent: ", local_path)
+    message("Fichier d\u00e9j\u00e0 pr\u00e9sent: ", local_path)
     return(local_path)
   }
 
@@ -153,7 +156,7 @@ hf_download_file <- function(repo_id, filename, dest_dir, token = "",
     "/resolve/main/", filename
   )
 
-  message("Téléchargement HF: ", filename)
+  message("T\u00e9l\u00e9chargement HF: ", filename)
 
   headers <- list()
   if (nchar(token) > 0) {
@@ -170,12 +173,19 @@ hf_download_file <- function(repo_id, filename, dest_dir, token = "",
     message("OK: ", local_path)
     return(local_path)
   }, error = function(e) {
-    warning("Échec du téléchargement: ", filename, " - ", e$message)
+    warning("\u00c9chec du t\u00e9l\u00e9chargement: ", filename, " - ", e$message)
     return(NULL)
   })
 }
 
 #' Télécharger un ensemble de fichiers depuis Hugging Face
+#'
+#' @param repo_id Identifiant du dépôt Hugging Face (ex. "AI4Forest/Open-Canopy")
+#' @param file_list Vecteur des chemins de fichiers à télécharger dans le dépôt
+#' @param dest_dir Répertoire de destination local
+#' @param token Jeton Hugging Face ; chaîne vide pour un dépôt public
+#' @param overwrite Retélécharger un fichier déjà présent localement
+#' @return Vecteur des chemins locaux téléchargés
 hf_download_files <- function(repo_id, file_list, dest_dir, token = "",
                                overwrite = FALSE) {
   paths <- character(length(file_list))
@@ -203,7 +213,7 @@ download_open_canopy_subset <- function(split = "test",
                                          data_type = "all",
                                          dest_dir = DATA_DIR_HF,
                                          token = HF_TOKEN) {
-  message("=== Téléchargement Open-Canopy (SPOT 1.5m) ===")
+  message("=== T\u00e9l\u00e9chargement Open-Canopy (SPOT 1.5m) ===")
   message("Split: ", split, " | Tuiles: ", n_tiles, " | Type: ", data_type)
 
   files <- hf_list_files(HF_REPO_ID, path = split, token = token)
@@ -219,7 +229,7 @@ download_open_canopy_subset <- function(split = "test",
   }
 
   if (nrow(files) == 0) {
-    message("Aucun fichier trouvé pour le split '", split, "'.")
+    message("Aucun fichier trouv\u00e9 pour le split '", split, "'.")
     return(invisible(NULL))
   }
 
@@ -236,7 +246,7 @@ download_open_canopy_subset <- function(split = "test",
     tif_files <- tif_files[seq_len(n_tiles), ]
   }
 
-  message(sprintf("\n%d fichier(s) à télécharger.", nrow(tif_files)))
+  message(sprintf("\n%d fichier(s) \u00e0 t\u00e9l\u00e9charger.", nrow(tif_files)))
 
   downloaded <- hf_download_files(
     repo_id = HF_REPO_ID,
@@ -245,22 +255,26 @@ download_open_canopy_subset <- function(split = "test",
     token = token
   )
 
-  message("\n=== Téléchargement terminé ===")
-  message(sum(!is.na(downloaded)), " fichier(s) téléchargé(s).")
+  message("\n=== T\u00e9l\u00e9chargement termin\u00e9 ===")
+  message(sum(!is.na(downloaded)), " fichier(s) t\u00e9l\u00e9charg\u00e9(s).")
   return(downloaded)
 }
 
 #' Cloner le dataset complet via git (nécessite git-lfs)
+#'
+#' @param dest_dir Répertoire de destination du clone
+#' @param token Jeton Hugging Face, inséré dans l'URL pour un dépôt privé
+#' @return Chemin du dépôt cloné
 hf_git_clone <- function(dest_dir = file.path(DATA_DIR_HF, "Open-Canopy"),
                           token = HF_TOKEN) {
   if (dir.exists(dest_dir)) {
-    message("Le répertoire existe déjà: ", dest_dir)
+    message("Le r\u00e9pertoire existe d\u00e9j\u00e0: ", dest_dir)
     return(invisible(dest_dir))
   }
 
   lfs_check <- system("git lfs version", intern = TRUE, ignore.stderr = TRUE)
   if (length(lfs_check) == 0) {
-    stop("git-lfs n'est pas installé. ",
+    stop("git-lfs n'est pas install\u00e9. ",
          "Installez-le avec: sudo apt install git-lfs")
   }
 
@@ -273,7 +287,7 @@ hf_git_clone <- function(dest_dir = file.path(DATA_DIR_HF, "Open-Canopy"),
   }
 
   system2("git", args = c("clone", clone_url, dest_dir))
-  message("Clonage terminé: ", dest_dir)
+  message("Clonage termin\u00e9: ", dest_dir)
   return(invisible(dest_dir))
 }
 
@@ -303,10 +317,10 @@ load_ign_ortho <- function(file_path, type = "rvb") {
     names(r)[1:3] <- c("PIR", "Rouge", "Vert")
   }
 
-  message(sprintf("Ortho IGN %s chargée: %s", toupper(type), basename(file_path)))
+  message(sprintf("Ortho IGN %s charg\u00e9e: %s", toupper(type), basename(file_path)))
   message(sprintf("  Dimensions: %d x %d pixels", nrow(r), ncol(r)))
   message(sprintf("  Bandes: %d (%s)", nlyr(r), paste(names(r), collapse = ", ")))
-  message(sprintf("  Résolution: %.2f x %.2f m", res(r)[1], res(r)[2]))
+  message(sprintf("  R\u00e9solution: %.2f x %.2f m", res(r)[1], res(r)[2]))
   message(sprintf("  CRS: %s", crs(r, describe = TRUE)$name))
   message(sprintf("  Emprise: %.0f - %.0f E, %.0f - %.0f N",
                    ext(r)[1], ext(r)[2], ext(r)[3], ext(r)[4]))
@@ -326,7 +340,7 @@ scan_ign_files <- function(dir_path = DATA_DIR_IGN, recursive = TRUE) {
   }))
 
   if (length(files) == 0) {
-    message("Aucun fichier image trouvé dans: ", dir_path)
+    message("Aucun fichier image trouv\u00e9 dans: ", dir_path)
     return(data.frame())
   }
 
@@ -340,7 +354,7 @@ scan_ign_files <- function(dir_path = DATA_DIR_IGN, recursive = TRUE) {
     stringsAsFactors = FALSE
   )
 
-  message(sprintf("Trouvé %d fichier(s) ortho IGN:", nrow(df)))
+  message(sprintf("Trouv\u00e9 %d fichier(s) ortho IGN:", nrow(df)))
   message(sprintf("  RVB: %d", sum(df$type == "rvb")))
   message(sprintf("  IRC: %d", sum(df$type == "irc")))
 
@@ -365,11 +379,11 @@ download_ign_wms <- function(bbox, layer = IGN_LAYER_ORTHO, res_m = RES_IGN,
   max_px <- 4096
   if (width > max_px || height > max_px) {
     message("Emprise trop grande pour un seul appel WMS. ",
-            "Découpage en tuiles recommandé.")
+            "D\u00e9coupage en tuiles recommand\u00e9.")
     scale_factor <- max_px / max(width, height)
     width  <- round(width * scale_factor)
     height <- round(height * scale_factor)
-    message(sprintf("  Résolution dégradée: %.2f m",
+    message(sprintf("  R\u00e9solution d\u00e9grad\u00e9e: %.2f m",
                      (xmax - xmin) / width))
   }
 
@@ -392,7 +406,7 @@ download_ign_wms <- function(bbox, layer = IGN_LAYER_ORTHO, res_m = RES_IGN,
     "&STYLES="
   )
 
-  message(sprintf("Téléchargement IGN WMS (%s): %dx%d px...", layer, width, height))
+  message(sprintf("T\u00e9l\u00e9chargement IGN WMS (%s): %dx%d px...", layer, width, height))
 
   tryCatch({
     curl_download(url = wms_url, destfile = dest_file, quiet = FALSE)
@@ -407,7 +421,7 @@ download_ign_wms <- function(bbox, layer = IGN_LAYER_ORTHO, res_m = RES_IGN,
 
     return(dest_file)
   }, error = function(e) {
-    warning("Échec du téléchargement WMS: ", e$message)
+    warning("\u00c9chec du t\u00e9l\u00e9chargement WMS: ", e$message)
     return(NULL)
   })
 }
@@ -424,15 +438,15 @@ download_ign_ortho_pair <- function(bbox, res_m = RES_IGN,
                                      millesime_irc = MILLESIME_IRC) {
   layer_ortho <- ign_layer_name("ortho", millesime_ortho)
   layer_irc   <- ign_layer_name("irc",   millesime_irc)
-  label_ortho <- if (is.null(millesime_ortho)) "plus récent" else millesime_ortho
-  label_irc   <- if (is.null(millesime_irc))   "plus récent" else millesime_irc
+  label_ortho <- if (is.null(millesime_ortho)) "plus r\u00e9cent" else millesime_ortho
+  label_irc   <- if (is.null(millesime_irc))   "plus r\u00e9cent" else millesime_irc
 
-  message("=== Téléchargement ortho IGN RVB + IRC ===")
+  message("=== T\u00e9l\u00e9chargement ortho IGN RVB + IRC ===")
   message(sprintf("Emprise: %.0f, %.0f, %.0f, %.0f (Lambert-93)",
                    bbox[1], bbox[2], bbox[3], bbox[4]))
-  message(sprintf("Résolution: %.2f m", res_m))
-  message(sprintf("Millésime RVB: %s (couche: %s)", label_ortho, layer_ortho))
-  message(sprintf("Millésime IRC: %s (couche: %s)", label_irc, layer_irc))
+  message(sprintf("R\u00e9solution: %.2f m", res_m))
+  message(sprintf("Mill\u00e9sime RVB: %s (couche: %s)", label_ortho, layer_ortho))
+  message(sprintf("Mill\u00e9sime IRC: %s (couche: %s)", label_irc, layer_irc))
 
   rvb_path <- tryCatch(
     download_ign_wms(bbox, layer = layer_ortho, res_m = res_m),
@@ -481,12 +495,12 @@ resample_ign_to_spot <- function(ign_raster, target_res = RES_SPOT,
                                   method = "average") {
   current_res <- res(ign_raster)[1]
   if (abs(current_res - target_res) < 0.01) {
-    message("Résolution déjà à ", target_res, " m")
+    message("R\u00e9solution d\u00e9j\u00e0 \u00e0 ", target_res, " m")
     return(ign_raster)
   }
 
   agg_factor <- round(target_res / current_res)
-  message(sprintf("Rééchantillonnage: %.2f m → %.2f m (facteur %dx)",
+  message(sprintf("R\u00e9\u00e9chantillonnage: %.2f m \u2192 %.2f m (facteur %dx)",
                    current_res, target_res, agg_factor))
 
   # Agrégation (moyenne des pixels) plutôt que simple rééchantillonnage
@@ -495,7 +509,7 @@ resample_ign_to_spot <- function(ign_raster, target_res = RES_SPOT,
                                    na.rm = TRUE)
 
   message(sprintf("  Avant: %d x %d pixels", nrow(ign_raster), ncol(ign_raster)))
-  message(sprintf("  Après: %d x %d pixels", nrow(r_resampled), ncol(r_resampled)))
+  message(sprintf("  Apr\u00e8s: %d x %d pixels", nrow(r_resampled), ncol(r_resampled)))
 
   return(r_resampled)
 }
@@ -505,12 +519,12 @@ resample_ign_to_spot <- function(ign_raster, target_res = RES_SPOT,
 # ==============================================================================
 
 if (sys.nframe() == 0) {
-  message("=== Open-Canopy + IGN Ortho : Chargement des données ===\n")
+  message("=== Open-Canopy + IGN Ortho : Chargement des donn\u00e9es ===\n")
 
   # --- A. Hugging Face (Open-Canopy, SPOT 1.5m) ---
   message("--- A. Dataset Hugging Face (Open-Canopy, SPOT 1.5m) ---")
   message("Dataset: ", HF_REPO_ID)
-  message("Token HF: ", ifelse(nchar(HF_TOKEN) > 0, "configuré", "non défini"))
+  message("Token HF: ", ifelse(nchar(HF_TOKEN) > 0, "configur\u00e9", "non d\u00e9fini"))
 
   root_files <- hf_list_files(HF_REPO_ID, token = HF_TOKEN)
   if (nrow(root_files) > 0) {
@@ -519,24 +533,24 @@ if (sys.nframe() == 0) {
   }
 
   # --- B. Données IGN locales (ortho RVB + IRC, 0.20m) ---
-  message("\n--- B. Données IGN locales (BD ORTHO® 0.20m) ---")
-  message("Répertoire: ", DATA_DIR_IGN)
+  message("\n--- B. Donn\u00e9es IGN locales (BD ORTHO\u00ae 0.20m) ---")
+  message("R\u00e9pertoire: ", DATA_DIR_IGN)
 
   ign_files <- scan_ign_files()
   if (nrow(ign_files) > 0) {
     print(ign_files[, c("filename", "type", "size_mb")])
   } else {
     message("Placez vos fichiers IGN (.jp2 ou .tif) dans: ", DATA_DIR_IGN)
-    message("\nPour télécharger via WMS, utilisez:")
+    message("\nPour t\u00e9l\u00e9charger via WMS, utilisez:")
     message('  bbox <- c(843000, 6518000, 844000, 6519000)  # Lambert-93')
     message('  download_ign_ortho_pair(bbox)')
   }
 
   # --- C. Comparaison des résolutions ---
   message("\n--- C. Comparaison SPOT vs IGN ---")
-  message(sprintf("SPOT 6-7 : %.1f m/pixel → %d pixels/km²",
+  message(sprintf("SPOT 6-7 : %.1f m/pixel \u2192 %d pixels/km\u00b2",
                    RES_SPOT, as.integer((1000 / RES_SPOT)^2)))
-  message(sprintf("IGN Ortho: %.1f m/pixel → %d pixels/km²",
+  message(sprintf("IGN Ortho: %.1f m/pixel \u2192 %d pixels/km\u00b2",
                    RES_IGN, as.integer((1000 / RES_IGN)^2)))
-  message(sprintf("Facteur de résolution: %.1fx", RES_SPOT / RES_IGN))
+  message(sprintf("Facteur de r\u00e9solution: %.1fx", RES_SPOT / RES_IGN))
 }

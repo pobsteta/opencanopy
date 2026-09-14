@@ -9,6 +9,15 @@ plot_canopy_change(
   title = "Changement de hauteur de canopée (m)"
 )
 }
+\arguments{
+\item{change_raster}{SpatRaster de variation de hauteur, tel que renvoyé par
+\code{\link[=compute_canopy_change]{compute_canopy_change()}}}
+
+\item{title}{Titre du graphique}
+}
+\value{
+Invisible \code{NULL}, appelée pour son effet de bord (tracé)
+}
 \description{
 Visualiser les changements de canopée
 }

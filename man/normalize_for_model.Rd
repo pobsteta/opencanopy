@@ -16,6 +16,6 @@ SpatRaster normalisé
 }
 \description{
 Normalisation des valeurs et conversion en format attendu.
-Les images SPOT Open-Canopy sont en réflectance \link{0, 1} ou \link{0, 10000}.
-Les ortho IGN sont en radiométrie 8-bit \link{0, 255}.
+Les images SPOT Open-Canopy sont en réflectance \verb{[0, 1]} ou \verb{[0, 10000]}.
+Les ortho IGN sont en radiométrie 8-bit \verb{[0, 255]}.
 }

@@ -6,6 +6,16 @@
 \usage{
 plot_chm(chm_raster, title = "Canopy Height Model (m)", col_palette = NULL)
 }
+\arguments{
+\item{chm_raster}{SpatRaster du CHM}
+
+\item{title}{Titre du graphique}
+
+\item{col_palette}{Vecteur de couleurs ; \code{NULL} pour la palette par défaut}
+}
+\value{
+Invisible \code{NULL}, appelée pour son effet de bord (tracé)
+}
 \description{
 Visualiser le CHM
 }
