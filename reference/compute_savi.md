@@ -1,7 +1,7 @@
-# Calculer le NDRE (Normalized Difference Red Edge) approximé
+# Calculer le SAVI (Soil Adjusted Vegetation Index, Huete 1988)
 
-Approximation basée sur la différence PIR - Vert normalisée. Utile pour
-différencier les espèces et l'état de santé.
+SAVI = ((PIR - Rouge) / (PIR + Rouge + L)) \* (1 + L) Le facteur L
+attenue l'influence du sol nu, sensible sur couvert clairsemé.
 
 ## Usage
 
@@ -15,6 +15,11 @@ compute_savi(irc_raster, L = 0.5)
 
   SpatRaster IRC IGN
 
+- L:
+
+  Facteur de correction du sol ; 0.5 convient à un couvert moyen, 0
+  ramène le SAVI au NDVI et 1 correspond à un couvert très clairsemé
+
 ## Value
 
-SpatRaster
+SpatRaster du SAVI

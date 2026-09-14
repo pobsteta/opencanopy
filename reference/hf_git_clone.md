@@ -10,3 +10,17 @@ hf_git_clone(
   token = HF_TOKEN
 )
 ```
+
+## Arguments
+
+- dest_dir:
+
+  Répertoire de destination du clone
+
+- token:
+
+  Jeton Hugging Face, inséré dans l'URL pour un dépôt privé
+
+## Value
+
+Chemin du dépôt cloné

@@ -37,6 +37,11 @@ download_ortho_for_aoi(
 
   Millésime IRC (NULL = plus récent)
 
+- progress_callback:
+
+  Fonction appelée à chaque étape avec une liste décrivant l'avancement
+  ; `NULL` pour ne rien émettre
+
 ## Value
 
 Liste avec rvb, irc (SpatRaster) et millésimes utilisés

@@ -66,7 +66,7 @@ Calcul d’indices depuis l’IRC, masques, statistiques zonales.
 - [`compute_ndwi()`](https://pobsteta.github.io/opencanopy/reference/compute_ndwi.md)
   : Calculer le NDWI (Normalized Difference Water Index, McFeeters 1996)
 - [`compute_savi()`](https://pobsteta.github.io/opencanopy/reference/compute_savi.md)
-  : Calculer le NDRE (Normalized Difference Red Edge) approximé
+  : Calculer le SAVI (Soil Adjusted Vegetation Index, Huete 1988)
 - [`mask_vegetation()`](https://pobsteta.github.io/opencanopy/reference/mask_vegetation.md)
   : Créer un masque de végétation à partir du NDVI
 - [`cross_ndvi_chm()`](https://pobsteta.github.io/opencanopy/reference/cross_ndvi_chm.md)

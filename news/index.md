@@ -79,10 +79,11 @@ depuis la 1.0.0.
   `gh-pages` n’existait pas. L’index de référence échouait ensuite faute
   de fichiers `man/`, désormais générés.
 - **Le job `coverage` échouait sur une dépendance manquante** —
-  `covr::to_cobertura()` requiert `xml2`, un *Suggests* de covr que ni
-  `extra-packages` ni `needs: coverage` ne tiraient. Le workflow
-  R-CMD-check était rouge alors que le check et les tests passaient, et
-  aucun rapport n’a jamais atteint Codecov.
+  [`covr::to_cobertura()`](http://covr.r-lib.org/reference/to_cobertura.md)
+  requiert `xml2`, un *Suggests* de covr que ni `extra-packages` ni
+  `needs: coverage` ne tiraient. Le workflow R-CMD-check était rouge
+  alors que le check et les tests passaient, et aucun rapport n’a jamais
+  atteint Codecov.
 - **Aucune Release n’était créée** — les tags `v0.1.2` et `v1.0.0`
   étaient poussés sans objet *Release*, la page du dépôt affichait donc
   encore `v0.1.1`. Un workflow `release.yml` publie désormais la Release

@@ -56,6 +56,19 @@ pipeline_aoi_to_chm(
 
   Millésime IRC (NULL = plus récent)
 
+- ndvi_threshold:
+
+  Seuil NDVI au-dessus duquel une cellule est végétale
+
+- ndwi_threshold:
+
+  Seuil NDWI au-dessous duquel une cellule n'est pas de l'eau
+
+- progress_callback:
+
+  Fonction appelée à chaque étape avec une liste décrivant l'avancement
+  ; `NULL` pour ne rien émettre
+
 ## Value
 
 Liste avec tous les résultats

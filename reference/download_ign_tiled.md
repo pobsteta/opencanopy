@@ -37,6 +37,11 @@ download_ign_tiled(
 
   Préfixe pour les fichiers
 
+- progress_callback:
+
+  Fonction appelée à chaque étape avec une liste décrivant l'avancement
+  ; `NULL` pour ne rien émettre
+
 ## Value
 
 SpatRaster mosaïqué

@@ -13,3 +13,25 @@ plot_canopy_classes(
   title = "Classes de hauteur de canopée"
 )
 ```
+
+## Arguments
+
+- chm_raster:
+
+  SpatRaster du CHM
+
+- breaks:
+
+  Bornes des classes de hauteur, en mètres
+
+- labels:
+
+  Étiquettes des classes ; une de moins que `breaks`
+
+- title:
+
+  Titre du graphique
+
+## Value
+
+SpatRaster classifié, renvoyé de façon invisible

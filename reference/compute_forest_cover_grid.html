@@ -42,8 +42,30 @@
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">compute_forest_cover_grid</span><span class="op">(</span><span class="va">chm_raster</span>, cell_size <span class="op">=</span> <span class="fl">100</span>, height_threshold <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span></code></pre></div>
     </div>
 
+    <div class="section level2">
+    <h2 id="arguments">Arguments<a class="anchor" aria-label="anchor" href="#arguments"></a></h2>
 
-  </main></div>
+
+<dl><dt id="arg-chm-raster">chm_raster<a class="anchor" aria-label="anchor" href="#arg-chm-raster"></a></dt>
+<dd><p>SpatRaster du CHM</p></dd>
+
+
+<dt id="arg-cell-size">cell_size<a class="anchor" aria-label="anchor" href="#arg-cell-size"></a></dt>
+<dd><p>Côté de la maille en mètres</p></dd>
+
+
+<dt id="arg-height-threshold">height_threshold<a class="anchor" aria-label="anchor" href="#arg-height-threshold"></a></dt>
+<dd><p>Hauteur minimale, en mètres, pour compter une cellule
+comme forestière</p></dd>
+
+</dl></div>
+    <div class="section level2">
+    <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
+    <p>SpatRaster de la fraction forestière par maille, dans <code>[0, 1]</code></p>
+    </div>
+
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">

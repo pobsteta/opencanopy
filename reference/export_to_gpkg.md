@@ -1,6 +1,6 @@
 # Exporter une liste de rasters vers un GeoPackage
 
-Chaque couche binaire (valeurs dans 0, 1) est vectorisée puis écrite
+Chaque couche binaire (valeurs valant 0 ou 1) est vectorisée puis écrite
 comme couche du GeoPackage ; les autres sont écrites en GeoTIFF à côté,
 un raster continu n'ayant pas de représentation vectorielle utile.
 
