@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">opencanopy</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.2</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -32,6 +32,34 @@
       <small>Source: <a href="https://github.com/pobsteta/opencanopy/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.0.2" id="opencanopy-102">opencanopy 1.0.2<a class="anchor" aria-label="anchor" href="#opencanopy-102"></a></h2>
+<p>Version d’hygiène : <code>R CMD check</code> passe de six avertissements et trois NOTE à <code>Status: OK</code>.</p>
+<div class="section level4">
+<h4 id="bug-fixes-1-0-2">Bug Fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-1-0-2"></a></h4>
+<ul><li>
+<strong>Installer le paquet créait des répertoires dans le répertoire courant</strong> — trois <code>dir_create()</code> au niveau supérieur de <code>R/</code> s’exécutaient au chargement du package, donc à l’installation, et créaient <code>data/</code>, <code>data/ign</code>, <code>data/open_canopy</code> et <code>outputs/</code> là où se trouvait le processus. D’où les deux avertissements <code>Subdirectory 'data' contains no data sets</code> et <code>Files not of a type allowed in a 'data' directory</code>. Les répertoires sont désormais créés par les fonctions qui écrivent dedans — <code>export_raster()</code>, <code>export_stats()</code>, <code><a href="../reference/export_to_gpkg.html">export_to_gpkg()</a></code>, <code><a href="../reference/run_inference_python.html">run_inference_python()</a></code>.</li>
+<li>
+<strong><code><a href="../reference/compute_savi.html">compute_savi()</a></code> documentait un NDRE inexistant</strong> — le bloc roxygen au-dessus de la fonction décrivait un « Normalized Difference Red Edge » approximé, avec sa propre formule et son <code>@return</code> : rien à voir avec le SAVI que la fonction calcule. Titre, description et paramètres réécrits, <code>L</code> documenté.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="qualité-du-code-1-0-2">Qualité du code<a class="anchor" aria-label="anchor" href="#qualit%C3%A9-du-code-1-0-2"></a></h4>
+<ul><li>
+<strong>Caractères non-ASCII</strong> — les 185 chaînes littérales accentuées passent en séquences <code>\uXXXX</code>. La sortie reste identique, en français ; commentaires et blocs roxygen gardent leurs accents, <code>R CMD check</code> ne vérifiant que le code analysé.</li>
+<li>
+<strong><code><a href="https://rdrr.io/r/base/library.html" class="external-link">library()</a></code> dans le code du paquet</strong> — <code><a href="https://rstudio.github.io/reticulate/" class="external-link">library(reticulate)</a></code> disparaît au profit de <code>reticulate::</code> sur les 18 appels concernés, et le bloc de visualisation qualifie ses 43 appels en <code>ggplot2::</code>, <code>tidyterra::</code> et <code>patchwork::</code>. Les opérateurs <code>|</code> et <code>/</code> de patchwork continuent de fonctionner : <code><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace()</a></code> charge le namespace, ce qui suffit à enregistrer les méthodes S3.</li>
+<li>
+<strong>Dépendances non déclarées</strong> — <code>rprojroot</code> rejoint les <code>Suggests</code> et son unique appel est gardé par <code><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace()</a></code> ; les fonctions de base utilisées sans déclaration (<code>colorRampPalette</code>, <code>pdf</code>, <code>par</code>, <code>dev.off</code>, <code>cor</code>, <code>write.csv</code>, <code>download.file</code>…) sont importées explicitement dans <code>NAMESPACE</code>.</li>
+<li>
+<strong>Documentation</strong> — seize fonctions avaient un bloc roxygen réduit à son titre : leurs arguments sont documentés. Les <code>[0, 1]</code> et <code>[0, 255]</code> du roxygen, pris pour des liens Rd manquants, passent en code inline.</li>
+</ul></div>
+<div class="section level4">
+<h4 id="intégration-continue-1-0-2">Intégration continue<a class="anchor" aria-label="anchor" href="#int%C3%A9gration-continue-1-0-2"></a></h4>
+<ul><li>Les actions GitHub passent aux versions ciblant Node 24 (<code>actions/checkout@v5</code>, <code>codecov/codecov-action@v5</code>) : GitHub les y forçait déjà en émettant un avis de dépréciation à chaque exécution. L’avis restant provient d’une dépendance interne de <code>codecov-action</code>.</li>
+<li>
+<code>.claude</code> rejoint <code>.Rbuildignore</code>.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.0.1" id="opencanopy-101">opencanopy 1.0.1<a class="anchor" aria-label="anchor" href="#opencanopy-101"></a></h2>
 <p>Version de performance et de remise en état de la chaîne d’intégration. Elle solde le brief du 2026-09-14 (coût de l’inférence, OOM au calcul des indices) et publie les correctifs de tuilage restés sans version depuis la 1.0.0.</p>

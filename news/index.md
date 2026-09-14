@@ -1,5 +1,64 @@
 # Changelog
 
+## opencanopy 1.0.2
+
+Version d’hygiène : `R CMD check` passe de six avertissements et trois
+NOTE à `Status: OK`.
+
+#### Bug Fixes
+
+- **Installer le paquet créait des répertoires dans le répertoire
+  courant** — trois `dir_create()` au niveau supérieur de `R/`
+  s’exécutaient au chargement du package, donc à l’installation, et
+  créaient `data/`, `data/ign`, `data/open_canopy` et `outputs/` là où
+  se trouvait le processus. D’où les deux avertissements
+  `Subdirectory 'data' contains no data sets` et
+  `Files not of a type allowed in a 'data' directory`. Les répertoires
+  sont désormais créés par les fonctions qui écrivent dedans —
+  `export_raster()`, `export_stats()`,
+  [`export_to_gpkg()`](https://pobsteta.github.io/opencanopy/reference/export_to_gpkg.md),
+  [`run_inference_python()`](https://pobsteta.github.io/opencanopy/reference/run_inference_python.md).
+- **[`compute_savi()`](https://pobsteta.github.io/opencanopy/reference/compute_savi.md)
+  documentait un NDRE inexistant** — le bloc roxygen au-dessus de la
+  fonction décrivait un « Normalized Difference Red Edge » approximé,
+  avec sa propre formule et son `@return` : rien à voir avec le SAVI que
+  la fonction calcule. Titre, description et paramètres réécrits, `L`
+  documenté.
+
+#### Qualité du code
+
+- **Caractères non-ASCII** — les 185 chaînes littérales accentuées
+  passent en séquences `\uXXXX`. La sortie reste identique, en français
+  ; commentaires et blocs roxygen gardent leurs accents, `R CMD check`
+  ne vérifiant que le code analysé.
+- **[`library()`](https://rdrr.io/r/base/library.html) dans le code du
+  paquet** —
+  [`library(reticulate)`](https://rstudio.github.io/reticulate/)
+  disparaît au profit de `reticulate::` sur les 18 appels concernés, et
+  le bloc de visualisation qualifie ses 43 appels en `ggplot2::`,
+  `tidyterra::` et `patchwork::`. Les opérateurs `|` et `/` de patchwork
+  continuent de fonctionner :
+  [`requireNamespace()`](https://rdrr.io/r/base/ns-load.html) charge le
+  namespace, ce qui suffit à enregistrer les méthodes S3.
+- **Dépendances non déclarées** — `rprojroot` rejoint les `Suggests` et
+  son unique appel est gardé par
+  [`requireNamespace()`](https://rdrr.io/r/base/ns-load.html) ; les
+  fonctions de base utilisées sans déclaration (`colorRampPalette`,
+  `pdf`, `par`, `dev.off`, `cor`, `write.csv`, `download.file`…) sont
+  importées explicitement dans `NAMESPACE`.
+- **Documentation** — seize fonctions avaient un bloc roxygen réduit à
+  son titre : leurs arguments sont documentés. Les `[0, 1]` et
+  `[0, 255]` du roxygen, pris pour des liens Rd manquants, passent en
+  code inline.
+
+#### Intégration continue
+
+- Les actions GitHub passent aux versions ciblant Node 24
+  (`actions/checkout@v5`, `codecov/codecov-action@v5`) : GitHub les y
+  forçait déjà en émettant un avis de dépréciation à chaque exécution.
+  L’avis restant provient d’une dépendance interne de `codecov-action`.
+- `.claude` rejoint `.Rbuildignore`.
+
 ## opencanopy 1.0.1
 
 Version de performance et de remise en état de la chaîne d’intégration.
