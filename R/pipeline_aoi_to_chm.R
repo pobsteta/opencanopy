@@ -1211,6 +1211,24 @@ mosaiquer_predictions <- function(preds, margin_x = 0L, margin_y = 0L) {
 # Cache R du modèle Python (clé = checkpoint + architecture + canaux + img_size)
 .cache_modele_inference <- new.env(parent = emptyenv())
 
+#' Clé d'identité du modèle d'inférence
+#'
+#' Deux appels qui produisent la même clé réutilisent le modèle déjà construit ;
+#' toute différence force une reconstruction. `img_size` est arrondi au multiple
+#' de 32 supérieur, comme l'exige la réduction ×32 du PVTv2 : deux tuiles de
+#' tailles voisines partagent donc le même modèle.
+#'
+#' @param model_path Chemin du checkpoint, déjà résolu
+#' @param model_name "unet" ou "pvtv2"
+#' @param num_bands Nombre de canaux d'entrée
+#' @param img_size Taille de référence, arrondie au multiple de 32 supérieur
+#' @return Chaîne de caractères identifiant le modèle
+#' @keywords internal
+.cle_modele_inference <- function(model_path, model_name, num_bands, img_size) {
+  img_size <- as.integer(ceiling(img_size / 32) * 32)
+  paste(model_path, model_name, num_bands, img_size, sep = "|")
+}
+
 # Script Python d'initialisation : charge le checkpoint et construit le modèle,
 # puis le laisse dans `_OC_MODEL` (environnement `__main__` de reticulate).
 .PY_INIT_MODELE <- '
@@ -1851,7 +1869,7 @@ init_inference_model <- function(model_path, model_name = "pvtv2",
   # Résoudre le chemin modèle (symlinks HF sur Windows)
   model_path <- .resolve_hf_path(model_path)
   img_size <- as.integer(ceiling(img_size / 32) * 32)
-  cle <- paste(model_path, model_name, num_bands, img_size, sep = "|")
+  cle <- .cle_modele_inference(model_path, model_name, num_bands, img_size)
 
   # Le modèle Python survit entre deux reticulate::py_run_string() de la même session :
   # on ne reconstruit que si la clé change ou si l'interpréteur a été relancé.
