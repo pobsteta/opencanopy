@@ -26,7 +26,7 @@ cat("==============================================================\n\n")
 cat(">>> Étape 1 : Vérification des dépendances R\n")
 
 pkgs_required <- c("terra", "sf", "httr2", "jsonlite", "curl", "fs", "reticulate")
-# pkgs_optional <- c("hfhub", "ggplot2", "patchwork", "tidyterra")
+pkgs_optional <- c("hfhub", "ggplot2", "patchwork", "tidyterra")
 
 ok <- TRUE
 for (pkg in pkgs_required) {
