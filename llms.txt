@@ -1,0 +1,382 @@
+# opencanopy — Ortho IGN 0.20m + modèles Open-Canopy (SPOT 1.5m)
+
+Package R pour estimer la hauteur de canopée à partir des **ortho IGN**
+(RVB + IRC à 0.20m) en exploitant les modèles pré-entraînés
+**[Open-Canopy](https://huggingface.co/datasets/AI4Forest/Open-Canopy)**
+(SPOT 6-7 à 1.5m).
+
+## Contexte
+
+Le projet **Open-Canopy** fournit des modèles (UNet, PVTv2) entraînés
+sur images SPOT 6-7 à 1.5m pour prédire la hauteur de canopée. Ce dépôt
+adapte ces modèles pour fonctionner avec les **orthophotos IGN** (BD
+ORTHO®) à **0.20m**, qui offrent une résolution 7.5x supérieure.
+
+### Comparaison des données sources
+
+|                | Open-Canopy (SPOT)  | Ortho IGN          |
+|----------------|---------------------|--------------------|
+| **Résolution** | 1.5 m/pixel         | 0.20 m/pixel       |
+| **Pixels/km²** | 444 444             | 25 000 000         |
+| **Source**     | Satellite SPOT 6-7  | Photo aérienne IGN |
+| **Bandes RVB** | R, V, B (+ PIR)     | R, V, B            |
+| **Bandes IRC** | —                   | PIR, R, V          |
+| **Format**     | GeoTIFF             | JPEG2000 (.jp2)    |
+| **NDVI**       | Non                 | Oui (depuis IRC)   |
+| **Couverture** | 87 000 km² (France) | France entière     |
+
+## Structure du projet
+
+    ├── R/
+    │   ├── download_open_canopy.R   # Téléchargement HF + chargement IGN
+    │   ├── analyse_open_canopy.R    # Analyse, NDVI, visualisation
+    │   ├── prediction_open_canopy.R # Inférence modèles + post-traitement
+    │   └── pipeline_aoi_to_chm.R    # Pipeline complet AOI → CHM
+    ├── data/
+    │   ├── open_canopy/                # Dataset HF (SPOT 1.5m)
+    │   ├── ign/                        # Ortho IGN (RVB + IRC, 0.20m)
+    │   └── aoi.gpkg                    # Zone d'intérêt (polygone)
+    ├── outputs/                        # Résultats et graphiques
+    ├── .gitignore
+    └── README.md
+
+## Prérequis
+
+### Packages R
+
+``` r
+
+install.packages(c("terra", "sf", "httr2", "jsonlite", "curl", "fs"))
+install.packages("reticulate")  # Interface Python
+
+# Recommandé : hfhub pour télécharger les modèles depuis Hugging Face
+# sans dépendance Python (R natif)
+install.packages("hfhub")
+```
+
+### Environnement Python (miniforge + conda)
+
+L’environnement conda `open_canopy` doit être installé avec PyTorch :
+
+``` bash
+# Installer miniforge si nécessaire
+# https://github.com/conda-forge/miniforge
+
+conda create -n open_canopy python=3.10
+conda activate open_canopy
+pip install torch torchvision numpy rasterio segmentation-models-pytorch timm
+
+# huggingface_hub Python est optionnel si le package R hfhub est installé
+# pip install huggingface_hub
+```
+
+### Téléchargement des modèles depuis Hugging Face
+
+Deux méthodes sont supportées (la première est préférée) :
+
+1.  **hfhub R natif** (recommandé) : `install.packages("hfhub")` —
+    aucune dépendance Python pour le téléchargement
+2.  **Python huggingface_hub** (fallback) :
+    `pip install huggingface_hub` — utilisé si hfhub n’est pas installé
+
+Le téléchargement utilise automatiquement la meilleure méthode
+disponible.
+
+### Connexion R → Python
+
+``` r
+
+library(reticulate)
+use_condaenv("open_canopy", required = TRUE)
+```
+
+## Utilisation
+
+### 1. Charger les données
+
+``` r
+
+source("R/download_open_canopy.R")
+
+# --- Ortho IGN (placer les .jp2 dans data/ign/) ---
+irc <- load_ign_ortho("data/ign/ortho_irc.jp2", type = "irc")
+rvb <- load_ign_ortho("data/ign/ortho_rvb.jp2", type = "rvb")
+
+# Télécharger via WMS IGN pour une emprise donnée (Lambert-93)
+bbox <- c(843000, 6518000, 844000, 6519000)
+download_ign_ortho_pair(bbox)
+
+# --- Open-Canopy (SPOT, Hugging Face) ---
+download_open_canopy_subset(split = "test", n_tiles = 5)
+```
+
+### 2. Analyser (NDVI, classification, croisement)
+
+``` r
+
+source("R/analyse_open_canopy.R")
+
+# Charger l'IRC et calculer le NDVI
+irc <- load_ign_ortho("data/ign/ortho_irc.jp2", type = "irc")
+ndvi <- compute_ndvi(irc)        # (PIR - R) / (PIR + R)
+gndvi <- compute_gndvi(irc)      # (PIR - V) / (PIR + V)
+savi <- compute_savi(irc)        # SAVI (ajusté sol)
+
+# Masque de végétation
+veg <- mask_vegetation(ndvi, threshold = 0.3)
+
+# Visualisation multi-panneaux
+plot_ign_full_comparison(rvb, irc, chm)
+
+# Croisement NDVI x CHM
+cross <- cross_ndvi_chm(ndvi, chm)
+
+# Statistiques
+irc_stats <- compute_irc_stats(irc)
+chm_stats <- compute_chm_stats(chm)
+```
+
+### 3. Prédire la hauteur de canopée
+
+``` r
+
+source("R/prediction_open_canopy.R")
+
+# Configurer l'environnement Python
+setup_conda_env("open_canopy")
+
+# Télécharger un modèle pré-entraîné
+model_path <- download_pretrained_model("unet")
+
+# Pipeline complet : IGN 0.20m → agrégation 1.5m → inférence → CHM
+predict_chm_from_ign("data/ign/ortho_rvb.jp2", model_path)
+
+# Rééchantillonner manuellement
+ign <- load_ign_ortho("data/ign/ortho_rvb.jp2", type = "rvb")
+ign_1_5m <- resample_ign_to_spot(ign)  # 0.20m → 1.5m (facteur 8x)
+
+# Suréchantillonner un CHM prédit vers la résolution IGN
+chm_hr <- upsample_chm_to_ign(chm_predicted)  # 1.5m → 0.20m
+```
+
+### 4. Pipeline complet AOI → CHM (nouveau)
+
+``` r
+
+source("R/pipeline_aoi_to_chm.R")
+
+# Lancer le pipeline avec un fichier GeoPackage
+result <- pipeline_aoi_to_chm("data/aoi.gpkg")
+
+# Ou avec des options
+result <- pipeline_aoi_to_chm(
+  aoi_path    = "chemin/vers/ma_zone.gpkg",
+  output_dir  = "outputs",
+  model_name  = "unet"   # "unet" ou "pvtv2"
+)
+
+# Le résultat contient :
+# result$ortho_rvb  - Ortho RVB (0.20m)
+# result$ortho_irc  - Ortho IRC (0.20m)
+# result$ndvi       - NDVI
+# result$chm_1_5m   - CHM prédit à 1.5m
+# result$chm_0_2m   - CHM suréchantillonné à 0.20m
+```
+
+**Fichiers produits dans `outputs/` :**
+
+| Fichier                  | Description                               |
+|--------------------------|-------------------------------------------|
+| `ortho_rvb.tif`          | Ortho RVB IGN (0.20m)                     |
+| `ortho_irc.tif`          | Ortho IRC IGN (0.20m)                     |
+| `ndvi.tif`               | NDVI calculé depuis l’IRC                 |
+| `chm_predicted_1_5m.tif` | CHM prédit (résolution modèle)            |
+| `chm_predicted_0_2m.tif` | CHM suréchantillonné (résolution IGN)     |
+| `resultats_aoi.pdf`      | Visualisation récapitulative (4 panneaux) |
+
+## Workflow de rééchantillonnage
+
+    Ortho IGN (0.20m)                    Modèles Open-Canopy
+    5000 x 5000 px/km²                   entraînés sur SPOT 1.5m
+            │                                     │
+            ▼                                     │
+      aggregate(fact=8)                            │
+      moyenne 8x8 pixels                           │
+            │                                     │
+            ▼                                     ▼
+      Image à 1.5m  ──────────────────►  Inférence UNet/PVTv2
+      667 x 667 px/km²                            │
+                                                  ▼
+                                        CHM prédit à 1.5m
+                                                  │
+                                                  ▼
+                                        disagg(fact=8)    (optionnel)
+                                                  │
+                                                  ▼
+                                        CHM à 0.20m
+
+## Indices spectraux (depuis IRC IGN)
+
+| Indice | Formule                             | Usage                  |
+|--------|-------------------------------------|------------------------|
+| NDVI   | (PIR - R) / (PIR + R)               | Activité végétale      |
+| GNDVI  | (PIR - V) / (PIR + V)               | Teneur en chlorophylle |
+| SAVI   | ((PIR - R) / (PIR + R + L)) × (1+L) | Végétation sur sol nu  |
+
+## Références
+
+- **Open-Canopy** : Fogel et al. (2024).
+  [arXiv:2407.09392](https://arxiv.org/abs/2407.09392)
+- **Dataset HF** :
+  [AI4Forest/Open-Canopy](https://huggingface.co/datasets/AI4Forest/Open-Canopy)
+- **Code Python** :
+  [fajwel/Open-Canopy](https://github.com/fajwel/Open-Canopy)
+- **BD ORTHO® IGN** :
+  [geoservices.ign.fr/bdortho](https://geoservices.ign.fr/bdortho)
+- **Géoplateforme** : [data.geopf.fr](https://data.geopf.fr)
+
+# Package index
+
+## Pipeline complet
+
+Point d’entree principal : produit CHM + indices + PDF recapitulatif
+depuis un fichier AOI GeoPackage.
+
+- [`pipeline_aoi_to_chm()`](https://pobsteta.github.io/opencanopy/reference/pipeline_aoi_to_chm.md)
+  : Pipeline complet : AOI → Ortho IGN → CHM prédit
+
+## Telechargement de donnees
+
+Orthophotos IGN (WMS Geoplateforme) et dataset Open-Canopy (Hugging
+Face).
+
+- [`download_ign_ortho_pair()`](https://pobsteta.github.io/opencanopy/reference/download_ign_ortho_pair.md)
+  : Télécharger les ortho RVB et IRC pour une même emprise
+- [`download_ign_tiled()`](https://pobsteta.github.io/opencanopy/reference/download_ign_tiled.md)
+  : Télécharger une ortho IGN complète pour une emprise (avec tuilage
+  automatique)
+- [`download_ign_wms()`](https://pobsteta.github.io/opencanopy/reference/download_ign_wms.md)
+  : Télécharger une ortho IGN via WMS (pour une emprise donnée)
+- [`download_model()`](https://pobsteta.github.io/opencanopy/reference/download_model.md)
+  : Télécharger le modèle pré-entraîné depuis Hugging Face
+- [`download_open_canopy_src()`](https://pobsteta.github.io/opencanopy/reference/download_open_canopy_src.md)
+  : Télécharger le code source Open-Canopy
+- [`download_open_canopy_subset()`](https://pobsteta.github.io/opencanopy/reference/download_open_canopy_subset.md)
+  : Télécharger un sous-ensemble du dataset Open-Canopy
+- [`download_ortho_for_aoi()`](https://pobsteta.github.io/opencanopy/reference/download_ortho_for_aoi.md)
+  : Télécharger les ortho RVB et IRC pour une AOI
+- [`download_pretrained_model()`](https://pobsteta.github.io/opencanopy/reference/download_pretrained_model.md)
+  : Télécharger les modèles pré-entraînés depuis Hugging Face
+- [`download_wms_tile()`](https://pobsteta.github.io/opencanopy/reference/download_wms_tile.md)
+  : Télécharger une tuile WMS IGN
+- [`hf_download_file()`](https://pobsteta.github.io/opencanopy/reference/hf_download_file.md)
+  : Télécharger un fichier depuis Hugging Face
+- [`hf_download_files()`](https://pobsteta.github.io/opencanopy/reference/hf_download_files.md)
+  : Télécharger un ensemble de fichiers depuis Hugging Face
+- [`hf_git_clone()`](https://pobsteta.github.io/opencanopy/reference/hf_git_clone.md)
+  : Cloner le dataset complet via git (nécessite git-lfs)
+- [`hf_list_files()`](https://pobsteta.github.io/opencanopy/reference/hf_list_files.md)
+  : Lister les fichiers du dataset sur Hugging Face
+- [`load_aoi()`](https://pobsteta.github.io/opencanopy/reference/load_aoi.md)
+  : Charger l'AOI depuis un fichier GeoPackage
+- [`load_ign_ortho()`](https://pobsteta.github.io/opencanopy/reference/load_ign_ortho.md)
+  : Charger une ortho IGN (RVB ou IRC, 0.20m)
+- [`scan_ign_files()`](https://pobsteta.github.io/opencanopy/reference/scan_ign_files.md)
+  : Scanner un répertoire pour trouver les ortho IGN
+
+## Indices spectraux et analyse
+
+Calcul d’indices depuis l’IRC, masques, statistiques zonales.
+
+- [`compute_canopy_change()`](https://pobsteta.github.io/opencanopy/reference/compute_canopy_change.md)
+  : Différence de canopée entre deux dates
+- [`compute_chm_stats()`](https://pobsteta.github.io/opencanopy/reference/compute_chm_stats.md)
+  : Statistiques de hauteur de canopée
+- [`compute_forest_cover_grid()`](https://pobsteta.github.io/opencanopy/reference/compute_forest_cover_grid.md)
+  : Couverture forestière par grille
+- [`compute_gndvi()`](https://pobsteta.github.io/opencanopy/reference/compute_gndvi.md)
+  : Calculer le GNDVI (Green NDVI) depuis une ortho IRC IGN
+- [`compute_irc_stats()`](https://pobsteta.github.io/opencanopy/reference/compute_irc_stats.md)
+  : Statistiques spectrales d'une ortho IRC IGN
+- [`compute_ndvi()`](https://pobsteta.github.io/opencanopy/reference/compute_ndvi.md)
+  : Calculer le NDVI depuis une ortho IRC IGN
+- [`compute_ndwi()`](https://pobsteta.github.io/opencanopy/reference/compute_ndwi.md)
+  : Calculer le NDWI (Normalized Difference Water Index, McFeeters 1996)
+- [`compute_savi()`](https://pobsteta.github.io/opencanopy/reference/compute_savi.md)
+  : Calculer le NDRE (Normalized Difference Red Edge) approximé
+- [`mask_vegetation()`](https://pobsteta.github.io/opencanopy/reference/mask_vegetation.md)
+  : Créer un masque de végétation à partir du NDVI
+- [`cross_ndvi_chm()`](https://pobsteta.github.io/opencanopy/reference/cross_ndvi_chm.md)
+  : Croiser NDVI (IGN IRC) et CHM pour caractériser la végétation
+- [`zonal_canopy_stats()`](https://pobsteta.github.io/opencanopy/reference/zonal_canopy_stats.md)
+  : Statistiques zonales
+- [`detect_canopy_loss()`](https://pobsteta.github.io/opencanopy/reference/detect_canopy_loss.md)
+  : Détection de perte de canopée
+
+## Inference et post-traitement
+
+Preparation des tuiles, inference Python, reechantillonnage du CHM.
+
+- [`setup_conda_env()`](https://pobsteta.github.io/opencanopy/reference/setup_conda_env.md)
+  : Configurer reticulate pour utiliser l'environnement conda
+  open_canopy
+- [`setup_python()`](https://pobsteta.github.io/opencanopy/reference/setup_python.md)
+  : Configurer l'environnement Python
+- [`download_pretrained_model()`](https://pobsteta.github.io/opencanopy/reference/download_pretrained_model.md)
+  : Télécharger les modèles pré-entraînés depuis Hugging Face
+- [`download_model()`](https://pobsteta.github.io/opencanopy/reference/download_model.md)
+  : Télécharger le modèle pré-entraîné depuis Hugging Face
+- [`download_open_canopy_src()`](https://pobsteta.github.io/opencanopy/reference/download_open_canopy_src.md)
+  : Télécharger le code source Open-Canopy
+- [`find_checkpoint_name()`](https://pobsteta.github.io/opencanopy/reference/find_checkpoint_name.md)
+  : Trouver le nom du fichier checkpoint dans le dataset HF via l'API
+- [`tile_for_inference()`](https://pobsteta.github.io/opencanopy/reference/tile_for_inference.md)
+  : Découper une image IGN en tuiles pour l'inférence
+- [`normalize_for_model()`](https://pobsteta.github.io/opencanopy/reference/normalize_for_model.md)
+  : Préparer une tuile IGN pour le modèle Open-Canopy
+- [`run_inference_python()`](https://pobsteta.github.io/opencanopy/reference/run_inference_python.md)
+  : Exécuter l'inférence sur une tuile via Python
+- [`predict_chm_from_ign()`](https://pobsteta.github.io/opencanopy/reference/predict_chm_from_ign.md)
+  : Pipeline complet : ortho IGN → prédiction CHM
+- [`resample_ign_to_spot()`](https://pobsteta.github.io/opencanopy/reference/resample_ign_to_spot.md)
+  : Rééchantillonner une ortho IGN de 0.2m vers 1.5m
+- [`upsample_chm_to_ign()`](https://pobsteta.github.io/opencanopy/reference/upsample_chm_to_ign.md)
+  : Suréchantillonner un CHM prédit (1.5m) vers la résolution IGN
+  (0.20m)
+- [`load_predictions()`](https://pobsteta.github.io/opencanopy/reference/load_predictions.md)
+  : Charger les prédictions
+- [`evaluate_predictions()`](https://pobsteta.github.io/opencanopy/reference/evaluate_predictions.md)
+  : Évaluer les prédictions vs CHM de référence
+
+## Visualisation et export
+
+- [`plot_canopy_change()`](https://pobsteta.github.io/opencanopy/reference/plot_canopy_change.md)
+  : Visualiser les changements de canopée
+- [`plot_canopy_classes()`](https://pobsteta.github.io/opencanopy/reference/plot_canopy_classes.md)
+  : Classification de la canopée
+- [`plot_chm()`](https://pobsteta.github.io/opencanopy/reference/plot_chm.md)
+  : Visualiser le CHM
+- [`plot_chm_histogram()`](https://pobsteta.github.io/opencanopy/reference/plot_chm_histogram.md)
+  : Histogramme des hauteurs de canopée
+- [`plot_ign_full_comparison()`](https://pobsteta.github.io/opencanopy/reference/plot_ign_full_comparison.md)
+  : Comparaison multi-panneaux : IGN RVB + IRC + NDVI + CHM
+- [`plot_irc()`](https://pobsteta.github.io/opencanopy/reference/plot_irc.md)
+  : Visualiser une ortho IRC en fausses couleurs
+- [`plot_ndvi()`](https://pobsteta.github.io/opencanopy/reference/plot_ndvi.md)
+  : Visualiser le NDVI
+- [`plot_prediction_comparison()`](https://pobsteta.github.io/opencanopy/reference/plot_prediction_comparison.md)
+  : Visualiser la comparaison prédiction vs référence
+- [`plot_resolution_comparison()`](https://pobsteta.github.io/opencanopy/reference/plot_resolution_comparison.md)
+  : Comparaison SPOT (1.5m) vs IGN (0.20m) sur la même zone
+- [`plot_rgb()`](https://pobsteta.github.io/opencanopy/reference/plot_rgb.md)
+  : Visualiser une image en couleurs naturelles (RGB)
+- [`export_to_gpkg()`](https://pobsteta.github.io/opencanopy/reference/export_to_gpkg.md)
+  : Exporter une liste de rasters vers un GeoPackage
+
+## Utilitaires geospatiaux
+
+Helpers de projection et de rattachement du CRS.
+
+- [`ancrer_crs_l93()`](https://pobsteta.github.io/opencanopy/reference/ancrer_crs_l93.md)
+  : Rattacher le CRS d'un raster à l'autorité EPSG:2154
+

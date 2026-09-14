@@ -1,0 +1,8 @@
+pandoc: 3.8.3
+pkgdown: 2.2.1
+pkgdown_sha: ~
+articles: {}
+last_built: 2026-09-14T10:44Z
+urls:
+  reference: https://pobsteta.github.io/opencanopy/reference
+  article: https://pobsteta.github.io/opencanopy/articles
