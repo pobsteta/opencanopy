@@ -33,6 +33,7 @@ RES_IGN  <- 0.2
 #'
 #' @param tile_path Chemin vers le fichier .tif
 #' @return SpatRaster
+#' @keywords internal
 load_spot_image <- function(tile_path) {
   if (!file.exists(tile_path)) stop("Fichier introuvable: ", tile_path)
 
@@ -75,6 +76,7 @@ load_ign_ortho <- function(file_path, type = "rvb") {
 #'
 #' @param tile_path Chemin vers le fichier .tif
 #' @return SpatRaster
+#' @keywords internal
 load_chm <- function(tile_path) {
   if (!file.exists(tile_path)) stop("Fichier introuvable: ", tile_path)
 
@@ -93,6 +95,7 @@ load_chm <- function(tile_path) {
 }
 
 #' Lister et charger toutes les tuiles d'un split
+#' @keywords internal
 load_tiles <- function(split = "test", data_type = "images",
                         data_dir = DATA_DIR_HF) {
   tile_dir <- file.path(data_dir, split, data_type)
